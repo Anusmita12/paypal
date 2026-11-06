@@ -11,6 +11,8 @@ Last updated: 2026-11-07 (authoring machine: macOS, Python 3.13.5, Node 24.15, P
 | Backend tests | `cd backend && uv run pytest -q` | **82 passed** |
 | Frontend typecheck + production build | `cd frontend && npm run build` | passed |
 | Browser end-to-end (desktop + mobile) | `cd frontend && npx playwright test` | **5 passed** |
+| Fresh clone follows README (no Docker) | clone → `cp .env.example .env` → `uv sync` → `migrate` → `npm ci && npm run build` → `uvicorn` | passed: `/api/ready` at migration head, demo session created (50¢ grant), 8 shortages, SPA at `/`, unknown `/api/*` returns JSON 404 |
+| Deploy YAML parses | `render.yaml`, `compose.yaml`, `.github/workflows/ci.yml` loaded with PyYAML | passed (syntax only; not executed) |
 
 The backend tests cover:
 - **Payment flow:**
