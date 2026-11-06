@@ -1,12 +1,12 @@
 // Shapes returned by the FastAPI backend. Money is always integer USD cents.
 
 export interface AppConfig {
-  ai_mode: "fixture" | "anthropic";
+  ai_mode: "fixture" | "anthropic" | "gemini";
   payment_mode: "fixture" | "paypal_sandbox";
   channel3_mode: "fixture" | "live";
   scenarios_enabled: boolean;
   paypal_client_id: string | null;
-  anthropic_model: string | null;
+  ai_model: string | null;
   currency: "USD";
   limits: {
     max_tool_calls: number;

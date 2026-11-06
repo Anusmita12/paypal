@@ -430,7 +430,7 @@ function ApprovalPanel({ ctx, p, proposal, refresh, working }: { ctx: Ctx; p: Pr
       </table>
 
       <div className="stack">
-        <div className="row"><h3>Why this offer</h3><Badge tone={ctx.config.ai_mode === "anthropic" ? "info" : "warn"}>{ctx.config.ai_mode === "anthropic" ? "written by Claude from server facts" : "deterministic template (fixture mode)"}</Badge></div>
+        <div className="row"><h3>Why this offer</h3><Badge tone={ctx.config.ai_mode === "fixture" ? "warn" : "info"}>{ctx.config.ai_mode === "fixture" ? "deterministic template (fixture mode)" : `written by ${ctx.config.ai_mode === "gemini" ? "Gemini" : "Claude"}; amounts checked against server figures`}</Badge></div>
         <p>{proposal.explanation}</p>
       </div>
 

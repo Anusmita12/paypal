@@ -45,11 +45,11 @@ export function PurchaseBadge({ status }: { status: PurchaseStatus }) {
 }
 
 export function ModeBadges({ config }: { config: AppConfig }) {
-  const ai = config.ai_mode === "anthropic" ? `AI: Claude ${config.anthropic_model ?? ""}`.trim() : "AI: fixture script";
+  const ai = config.ai_mode === "fixture" ? "AI: fixture script" : `AI: ${config.ai_mode === "gemini" ? "Gemini" : "Claude"} · ${config.ai_model ?? ""}`;
   const pay = config.payment_mode === "paypal_sandbox" ? "PayPal: Sandbox" : "PayPal: offline fixture";
   return (
     <>
-      <Badge tone={config.ai_mode === "anthropic" ? "ok" : "warn"} title="Which buyer-agent driver is running">
+      <Badge tone={config.ai_mode === "fixture" ? "warn" : "ok"} title="Which buyer-agent driver is running">
         {ai}
       </Badge>
       <Badge tone={config.payment_mode === "paypal_sandbox" ? "ok" : "warn"} title="Which payment provider is configured">

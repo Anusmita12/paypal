@@ -163,7 +163,7 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
     review, expired reservation, cross-session), 3 Playwright (main story by keyboard, wallet metering, mobile layout).
   - Decision: added "within N days" deadline hint; the sample request uses it so the demo works on any business date.
   - Decision: supplier terms are frozen during the reservation window; create/capture revalidate snapshot digest + reservation.
-- [ ] Phase 3 — Real AI + PayPal
+- [ ] Phase 3 — Real AI + PayPal (AI provider: Gemini free tier — user cannot buy Claude API credits; Claude driver kept)
   - Built and tested offline (2026-11-06): `agent_llm.run_claude` manual tool loop (strict tool schemas, adaptive
     thinking with `AI_EFFORT`, server-side refusal fallback on supported models, token accounting, no fixture fallback),
     explanation grounding check (dollar amounts must exist in server facts), `paypal_client.SandboxPayPal` (OAuth cache,

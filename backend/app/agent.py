@@ -1,5 +1,5 @@
 """Bounded buyer-agent runs. Fixture mode drives the real tools with a deterministic script; anthropic mode
-lets Claude choose tool calls (see `anthropic_driver`). Both share `agent_tools.execute` and its limits."""
+lets Claude or Gemini choose tool calls (see `model_driver`). Both share `agent_tools.execute` and its limits."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -35,7 +35,7 @@ def start_run(db: Session, session: DemoSession, procurement: Procurement) -> Ag
         procurement_id=procurement.id,
         session_id=session.id,
         mode=settings.ai_mode,
-        model=settings.anthropic_model if settings.ai_mode == "anthropic" else "fixture-script",
+        model=settings.ai_model or "fixture-script",
     )
     db.add(run)
     set_procurement_status(procurement, "planning", None)
@@ -97,7 +97,11 @@ def fixture_driver(ctx: ToolContext) -> str:
     return "No feasible offer. " + " ".join(comparison["suggestions"])
 
 
-def anthropic_driver(ctx: ToolContext) -> str:
+def model_driver(ctx: ToolContext) -> str:
+    if ctx.run.mode == "gemini":
+        from app.agent_gemini import run_gemini
+
+        return run_gemini(ctx)
     from app.agent_llm import run_claude
 
     return run_claude(ctx)
@@ -120,7 +124,7 @@ def run_agent_job(db: Session, payload: dict) -> None:
     ctx = ToolContext(db=db, session=session, procurement=procurement, run=run, settings=settings)
     ctx.event("status", f"Run started ({run.mode}{', model ' + run.model if run.model else ''})")
     try:
-        summary = fixture_driver(ctx) if run.mode == "fixture" else anthropic_driver(ctx)
+        summary = fixture_driver(ctx) if run.mode == "fixture" else model_driver(ctx)
     except RunLimitReached as exc:
         db.rollback()
         ctx.event("error", exc.args[0], ok=False)

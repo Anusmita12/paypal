@@ -66,7 +66,7 @@ def public_config(settings: Settings = Depends(get_settings)) -> dict:
         "channel3_mode": settings.channel3_mode,
         "scenarios_enabled": settings.enable_scenarios,
         "paypal_client_id": settings.paypal_client_id if settings.payment_mode == "paypal_sandbox" else None,
-        "anthropic_model": settings.anthropic_model if settings.ai_mode == "anthropic" else None,
+        "ai_model": settings.ai_model,
         "currency": "USD",
         "limits": {
             "max_tool_calls": settings.ai_max_tool_calls,

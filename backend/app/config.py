@@ -20,9 +20,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://tradepilot:local-dev-only@localhost:5432/tradepilot"
     session_secret: str = DEV_SESSION_SECRET
 
-    ai_mode: Literal["fixture", "anthropic"] = "fixture"
+    ai_mode: Literal["fixture", "anthropic", "gemini"] = "fixture"
     anthropic_api_key: str = ""
     anthropic_model: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = ""
     ai_max_tool_calls: int = 20
     ai_max_run_seconds: int = 180
     ai_max_output_tokens: int = 2048
@@ -54,6 +56,10 @@ class Settings(BaseSettings):
     port: int = 8000
 
     @property
+    def ai_model(self) -> str | None:
+        return {"anthropic": self.anthropic_model, "gemini": self.gemini_model}.get(self.ai_mode)
+
+    @property
     def origins(self) -> set[str]:
         extra = {o.strip().rstrip("/") for o in self.allowed_origins.split(",") if o.strip()}
         return {self.public_base_url.rstrip("/")} | extra
@@ -72,6 +78,11 @@ class Settings(BaseSettings):
                 out.append("AI_MODE=anthropic requires ANTHROPIC_API_KEY (Claude API key, not a Claude Code login).")
             if not self.anthropic_model:
                 out.append("AI_MODE=anthropic requires ANTHROPIC_MODEL set to a model ID your API account supports.")
+        if self.ai_mode == "gemini":
+            if not self.gemini_api_key:
+                out.append("AI_MODE=gemini requires GEMINI_API_KEY (free key from aistudio.google.com).")
+            if not self.gemini_model:
+                out.append("AI_MODE=gemini requires GEMINI_MODEL set to a model ID your key supports.")
         if self.payment_mode == "paypal_sandbox":
             for name in ("paypal_client_id", "paypal_client_secret", "paypal_merchant_id", "paypal_webhook_id"):
                 if not getattr(self, name):
