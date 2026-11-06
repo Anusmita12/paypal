@@ -4,6 +4,7 @@ from datetime import date
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PAYPAL_SANDBOX_BASE_URL = "https://api-m.sandbox.paypal.com"
@@ -56,6 +57,15 @@ class Settings(BaseSettings):
     run_jobs_in_process: bool = True
 
     port: int = 8000
+
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg_driver(cls, v: str) -> str:
+        # Hosts such as Render supply postgres:// or postgresql:// URLs; SQLAlchemy needs the psycopg 3 driver name.
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
 
     @property
     def ai_model(self) -> str | None:

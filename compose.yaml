@@ -1,0 +1,36 @@
+# Local full stack: `docker compose up --build`, then open http://localhost:8000
+# Reads secrets from .env (optional). Offline fixture modes work with no keys at all.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tradepilot
+      POSTGRES_PASSWORD: local-dev-only
+      POSTGRES_DB: tradepilot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradepilot -d tradepilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  app:
+    build:
+      context: .
+      args:
+        VITE_AG_STUDIO_LICENSE_KEY: ${VITE_AG_STUDIO_LICENSE_KEY:-}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://tradepilot:local-dev-only@db:5432/tradepilot
+      PUBLIC_BASE_URL: http://localhost:8000
+      ALLOWED_ORIGINS: http://localhost:8000
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  pgdata:

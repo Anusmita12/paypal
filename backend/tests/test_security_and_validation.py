@@ -97,3 +97,10 @@ def test_analytics_sources_are_session_scoped(api, other_api):
     assert len(mine["offers"]) >= 3 and len(mine["tool_usage"]) == 8 and len(mine["inventory"]) == 20
     theirs = other_api.get("/api/analytics").json()["sources"]
     assert theirs["offers"] == [] and theirs["tool_usage"] == []
+
+
+def test_database_url_gets_psycopg_driver():
+    from app.config import Settings
+
+    for raw in ("postgres://u:p@h:5432/d", "postgresql://u:p@h:5432/d", "postgresql+psycopg://u:p@h:5432/d"):
+        assert Settings(database_url=raw).database_url == "postgresql+psycopg://u:p@h:5432/d"
