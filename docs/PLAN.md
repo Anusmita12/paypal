@@ -195,7 +195,10 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
     chart for now. NOT built yet: AG Studio AI harness (custom `AgLlmAdapter` → our backend → Gemini) — stretch.
   - Fixed along the way: crashed agent runs/drafts no longer stay "running"; mobile layout overflow from grid tracks.
   - Tests: 81 pytest, 5 Playwright (desktop + mobile).
-- [ ] Phase 6 — Delivery
+- [x] Phase 6 — Delivery (2026-11-07): README rewrite, docs/{architecture,verification,demo-script,submission}.md,
+  Dockerfile (node build → python slim, non-root, migrate + single worker on $PORT), compose.yaml, render.yaml, CI workflow,
+  MIT LICENSE with placeholder holder, DB URL driver normalisation for Render. Fresh-clone setup verified; Docker build and
+  CI not executed (no Docker locally, no GitHub remote). Postman cut (first on cut list).
 - [ ] Hosting
 
 ### Pending external verification
