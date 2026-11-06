@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm.exc import StaleDataError
 
 import app.agent
+import app.payments
 from app.api import router
 from app.config import get_settings
 from app.db import get_sessionmaker
@@ -21,6 +22,27 @@ from app.seed import seed_global
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("tradepilot")
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+async def maintenance(stop: asyncio.Event, interval: float = 30.0) -> None:
+    """Periodic TTL cleanup. It never releases capture-pinned reservations (see expire_reservations)."""
+    from app.approvals import expire_reservations
+
+    def tick() -> None:
+        with get_sessionmaker()() as db:
+            if n := expire_reservations(db):
+                log.info("released %d expired reservation(s)", n)
+            db.commit()
+
+    while not stop.is_set():
+        try:
+            await asyncio.to_thread(tick)
+        except Exception:
+            log.exception("maintenance tick failed")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except TimeoutError:
+            pass
 
 
 @asynccontextmanager
@@ -35,10 +57,13 @@ async def lifespan(app: FastAPI):
         db.commit()
     log.info("modes: ai=%s payment=%s channel3=%s", settings.ai_mode, settings.payment_mode, settings.channel3_mode)
     stop = asyncio.Event()
-    task = asyncio.create_task(poller(stop, settings.jobs_poll_seconds)) if settings.run_jobs_in_process else None
+    tasks = (
+        [asyncio.create_task(poller(stop, settings.jobs_poll_seconds)), asyncio.create_task(maintenance(stop))]
+        if settings.run_jobs_in_process else []
+    )
     yield
     stop.set()
-    if task:
+    for task in tasks:
         await task
 
 

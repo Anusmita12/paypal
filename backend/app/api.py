@@ -1,8 +1,12 @@
+import csv
+import io
+import json
+
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app import approvals
+from app import approvals, imports, payments
 from app.agent import start_run
 from app.compare import compare
 from app.config import Settings, get_settings
@@ -11,13 +15,16 @@ from app.errors import AppError, not_found
 from app.models import (
     AgentEvent,
     AgentRun,
+    Capture,
     DemoSession,
     LedgerEntry,
     NegotiationRound,
     PaidTool,
     Procurement,
     Proposal,
+    ProviderOperation,
     Purchase,
+    PurchaseEvent,
     Quote,
     Reservation,
     Supplier,
@@ -25,9 +32,9 @@ from app.models import (
 )
 from app.procurement import confirm_requirements, create_procurement, get_procurement
 from app.restock import FORMULA, WINDOW_DAYS, restock_lines, window
-from app.schemas import ApproveIn, ConfirmIn, CreateProcurementIn
+from app.schemas import ApproveIn, ConfirmIn, CreateProcurementIn, ImportIn
 from app.security import create_session, current_session
-from app.suppliers import apply_scenario
+from app.suppliers import apply_scenario, utcnow
 
 router = APIRouter(prefix="/api")
 
@@ -133,6 +140,20 @@ def sales_summary(s: DemoSession = Depends(current_session), db: Session = Depen
                     "days_with_history": line.days_with_history} for line in lines],
         "total_units": sum(line.units_28d for line in lines),
     }
+
+
+@router.post("/imports/preview")
+def import_preview(body: ImportIn, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    batch = imports.preview(db, s, body.kind, body.csv_text)
+    db.commit()
+    return imports.view(batch)
+
+
+@router.post("/imports/{import_id}/apply")
+def import_apply(import_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    batch = imports.apply(db, s, import_id)
+    db.commit()
+    return imports.view(batch)
 
 
 # --- procurement ---
@@ -243,9 +264,10 @@ def approve(proposal_id: str, body: ApproveIn, s: DemoSession = Depends(current_
 # --- purchases and wallet ---
 
 
-def _purchase_view(db: Session, p: Purchase) -> dict:
+def _purchase_view(db: Session, p: Purchase, detail: bool = False) -> dict:
     res = db.scalar(select(Reservation).where(Reservation.purchase_id == p.id))
-    return {
+    cap = db.scalar(select(Capture).where(Capture.purchase_id == p.id))
+    view = {
         "purchase_id": p.id,
         "kind": p.kind,
         "status": p.status,
@@ -255,11 +277,38 @@ def _purchase_view(db: Session, p: Purchase) -> dict:
         "snapshot": p.snapshot,
         "digest": p.digest,
         "paypal_order_id": p.paypal_order_id,
+        "capture_id": cap.id if cap else None,
         "payment_mode": p.payment_mode,
         "reservation": res and {"status": res.status, "expires_at": res.expires_at.isoformat(), "lines": res.lines},
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }
+    if detail:
+        view["events"] = [
+            {"kind": e.kind, "source": e.source, "summary": e.summary, "at": e.created_at.isoformat()}
+            for e in db.scalars(select(PurchaseEvent).where(PurchaseEvent.purchase_id == p.id)
+                                .order_by(PurchaseEvent.created_at, PurchaseEvent.id))
+        ]
+        view["operations"] = [
+            {"kind": o.kind, "request_id": o.request_id, "state": o.state, "attempts": o.attempts,
+             "payload_digest": o.payload_digest, "last_error": o.last_error}
+            for o in db.scalars(select(ProviderOperation).where(ProviderOperation.purchase_id == p.id)
+                                .order_by(ProviderOperation.id))
+        ]
+        view["capture"] = cap and {"id": cap.id, "status": cap.status, "amount_cents": cap.amount_cents,
+                                   "currency": cap.currency, "source": cap.source, "at": cap.created_at.isoformat()}
+        view["ledger"] = [
+            {"kind": e.kind, "business_key": e.business_key, "amount_cents": e.amount_cents, "at": e.created_at.isoformat()}
+            for e in db.scalars(select(LedgerEntry).where(LedgerEntry.purchase_id == p.id))
+        ]
+    return view
+
+
+def _owned_purchase(db: Session, s: DemoSession, purchase_id: str) -> Purchase:
+    p = db.scalar(select(Purchase).where(Purchase.id == purchase_id, Purchase.session_id == s.id))
+    if not p:
+        raise not_found("purchase")
+    return p
 
 
 @router.get("/purchases")
@@ -270,10 +319,71 @@ def purchases(s: DemoSession = Depends(current_session), db: Session = Depends(g
 
 @router.get("/purchases/{purchase_id}")
 def purchase_detail(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
-    p = db.scalar(select(Purchase).where(Purchase.id == purchase_id, Purchase.session_id == s.id))
-    if not p:
-        raise not_found("purchase")
-    return _purchase_view(db, p)
+    return _purchase_view(db, _owned_purchase(db, s, purchase_id), detail=True)
+
+
+@router.post("/purchases/{purchase_id}/paypal-order")
+def paypal_order(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    p = payments.ensure_order(db, s.id, purchase_id)
+    return _purchase_view(db, p, detail=True)
+
+
+@router.post("/purchases/{purchase_id}/fixture-approve")
+def fixture_approve(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    p = payments.fixture_buyer_approve(db, s.id, purchase_id)
+    return _purchase_view(db, p, detail=True)
+
+
+@router.post("/purchases/{purchase_id}/capture")
+def capture(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    p = payments.capture(db, s.id, purchase_id)
+    return _purchase_view(db, p, detail=True)
+
+
+@router.post("/purchases/{purchase_id}/reconcile")
+def reconcile(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    _owned_purchase(db, s, purchase_id)
+    recent = db.scalar(
+        select(PurchaseEvent.created_at).where(PurchaseEvent.purchase_id == purchase_id, PurchaseEvent.kind == "reconcile")
+        .order_by(PurchaseEvent.created_at.desc()).limit(1)
+    )
+    if recent and (utcnow() - recent).total_seconds() < 3:
+        raise AppError("rate_limited", "Status was just checked; wait a few seconds.", 429)
+    try:
+        p = payments.reconcile(db, purchase_id, source="owner_check")
+    except payments.ProviderTimeout as exc:
+        raise AppError("provider_unavailable", "PayPal is not responding; try again shortly.", 503) from exc
+    return _purchase_view(db, p, detail=True)
+
+
+def _csv_safe(value: object) -> str:
+    """Neutralize spreadsheet formula prefixes in exported cells."""
+    text_value = "" if value is None else str(value)
+    return "'" + text_value if text_value[:1] in ("=", "+", "-", "@", "\t", "\r") else text_value
+
+
+@router.get("/purchases/{purchase_id}/evidence")
+def evidence(purchase_id: str, format: str = Query("json", pattern="^(json|csv)$"),
+             s: DemoSession = Depends(current_session), db: Session = Depends(get_db)):
+    view = _purchase_view(db, _owned_purchase(db, s, purchase_id), detail=True)
+    if format == "json":
+        return Response(
+            content=json.dumps({"generated_at": utcnow().isoformat(), "purchase": view}, indent=2),
+            media_type="application/json",
+            headers={"content-disposition": f'attachment; filename="purchase-{purchase_id}.json"'},
+        )
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["purchase_id", "status", "paypal_order_id", "capture_id", "supplier", "sku", "offered_sku", "name",
+                "qty", "unit_cents", "line_cents", "total_cents", "currency"])
+    snap = view["snapshot"]
+    for line in snap["lines"]:
+        w.writerow([_csv_safe(v) for v in (view["purchase_id"], view["status"], view["paypal_order_id"], view["capture_id"],
+                                           snap["supplier"]["name"], line["sku"], line["offered_sku"], line["name"],
+                                           line["qty"], line["unit_cents"], line["line_cents"], view["amount_cents"],
+                                           view["currency"])])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"content-disposition": f'attachment; filename="purchase-{purchase_id}.csv"'})
 
 
 @router.get("/wallet")

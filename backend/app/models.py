@@ -60,12 +60,13 @@ PROCUREMENT_TRANSITIONS = {
 }
 PROPOSAL_TRANSITIONS = {"current": {"approved", "superseded", "expired"}}
 PURCHASE_TRANSITIONS = {
-    "creating": {"awaiting_paypal_approval", "unknown", "cancelled", "failed"},
-    "awaiting_paypal_approval": {"capture_pending", "cancelled", "failed", "unknown"},
+    "creating": {"awaiting_paypal_approval", "unknown", "cancelled", "failed", "manual_review"},
+    "awaiting_paypal_approval": {"capture_pending", "cancelled", "failed", "unknown", "manual_review"},
     "capture_pending": {"paid", "unknown", "failed", "manual_review"},
     "unknown": {"awaiting_paypal_approval", "capture_pending", "paid", "failed", "cancelled", "manual_review"},
-    "failed": set(),
-    "cancelled": set(),
+    # A confirmed capture after a local failure/cancel is never reset to unpaid; a human reviews it.
+    "failed": {"manual_review"},
+    "cancelled": {"manual_review"},
     "paid": {"manual_review"},
     "manual_review": set(),
 }
@@ -372,6 +373,20 @@ class ProviderOperation(Base, TimestampMixin):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     response: Mapped[dict | None] = mapped_column(Json)
     last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class PurchaseEvent(Base):
+    """Append-only payment timeline: order creation, buyer approval, capture, webhooks, reconciliation."""
+
+    __tablename__ = "purchase_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    purchase_id: Mapped[str] = mapped_column(ForeignKey("purchases.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(24))  # owner | capture_response | webhook | reconciliation | system
+    summary: Mapped[str] = mapped_column(Text)
+    data: Mapped[dict] = mapped_column(Json, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Capture(Base):

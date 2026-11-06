@@ -31,3 +31,8 @@ class ConfirmIn(Strict):
 class ApproveIn(Strict):
     version: int
     digest: str = Field(min_length=64, max_length=64)
+
+
+class ImportIn(Strict):
+    kind: Literal["inventory", "sales"]
+    csv_text: str = Field(max_length=300_000)

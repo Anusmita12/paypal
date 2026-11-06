@@ -1,4 +1,4 @@
-"""Operational commands: python -m app.cli {check-config|migrate|seed|run-jobs|expire-reservations}."""
+"""Operational commands: python -m app.cli {check-config|migrate|seed|run-jobs|expire-reservations|reconcile-pending}."""
 
 import argparse
 import sys
@@ -43,7 +43,8 @@ def seed() -> int:
 
 
 def run_jobs() -> int:
-    import app.agent  # noqa: F401 - registers handlers
+    import app.agent
+    import app.payments  # noqa: F401
     from app.jobs import drain
 
     print(f"Processed {drain()} job(s).")
@@ -60,12 +61,35 @@ def expire_reservations() -> int:
     return 0
 
 
+def reconcile_pending() -> int:
+    """Check every unresolved purchase that already talked to PayPal; reuses persisted request IDs."""
+    from sqlalchemy import select
+
+    from app.models import Purchase
+    from app.payments import ProviderTimeout, reconcile
+
+    sm = get_sessionmaker()
+    with sm() as db:
+        ids = list(db.scalars(select(Purchase.id).where(
+            Purchase.status.in_(["unknown", "capture_pending", "awaiting_paypal_approval", "creating"]))))
+    for pid in ids:
+        with sm() as db:
+            try:
+                p = reconcile(db, pid, source="reconciliation")
+                print(f"{pid}: {p.status}")
+            except ProviderTimeout as exc:
+                print(f"{pid}: still unknown ({exc})")
+    print(f"Checked {len(ids)} purchase(s).")
+    return 0
+
+
 COMMANDS = {
     "check-config": check_config,
     "migrate": migrate,
     "seed": seed,
     "run-jobs": run_jobs,
     "expire-reservations": expire_reservations,
+    "reconcile-pending": reconcile_pending,
 }
 
 
