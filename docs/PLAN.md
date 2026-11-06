@@ -170,7 +170,16 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
     PayPal-Request-Id, timeout/5xx/429 → unknown, 4xx → rejected issue code, 401 refresh), verified webhook inbox
     (`/api/webhooks/paypal` → store → `process_webhook` job → re-read order → shared finalizer). 62 pytest passing.
   - NOT yet verified against real Claude or real PayPal Sandbox: waiting for credentials + tunnel.
-- [ ] Phase 4 — Pay-per-call
+- [x] Phase 4 — Pay-per-call (built + tested offline 2026-11-07; live Sandbox/Channel3 verification pending keys)
+  - `check_market_price` paid tool (2¢): Channel3 `POST /v1/search` (x-api-key) or labeled fixture listings; charged only
+    after a successful lookup; market figures count as grounded facts for explanations. Fixture script makes one check.
+  - Tool-credit top-up ($1/$3/$5, server-fixed) as a `wallet_topup` purchase through the same create/capture/finalizer;
+    no reservation; wallet credited once inside the finalizer transaction.
+  - Payouts: `payout_batches` table; usage claimed atomically per provider; stable `sender_batch_id` + PayPal-Request-Id;
+    lost response → `unknown` → refresh replays the same IDs; success writes one `provider_payout` ledger row.
+    Sandbox needs `PAYPAL_PAYOUT_RECEIVER` (a Sandbox personal account email).
+  - UI: top-up buttons, settle + payouts table with status check, live micro-payment ticker on the agent run.
+  - Tests: 73 pytest, 3 Playwright.
 - [ ] Phase 5 — Disputes + dashboard
 - [ ] Phase 6 — Delivery
 - [ ] Hosting

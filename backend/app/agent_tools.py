@@ -17,6 +17,7 @@ from app.approvals import create_proposal
 from app.compare import compare
 from app.config import Settings
 from app.errors import AppError
+from app.market import price_check
 from app.models import AgentEvent, AgentRun, DemoSession, Procurement, Product, Quote, Supplier
 from app.procurement import set_procurement_status
 from app.restock import FORMULA, restock_lines
@@ -44,6 +45,10 @@ class CounterofferArgs(_Args):
     surplus_skus: list[Annotated[str, Field(pattern=r"^[A-Z0-9-]{3,64}$")]] = Field(default_factory=list, max_length=5)
 
 
+class SkuArgs(_Args):
+    sku: str = Field(pattern=r"^[A-Z0-9-]{3,64}$")
+
+
 class ProposeArgs(_Args):
     quote_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     explanation: str = Field(min_length=1, max_length=1500)
@@ -66,6 +71,7 @@ class ToolContext:
     seq: int = 0
     proposal_id: str | None = None
     last_comparison: dict | None = None
+    market_facts: list[dict] = field(default_factory=list)
 
     def check_limits(self) -> None:
         if self.run.tool_calls >= self.settings.ai_max_tool_calls:
@@ -197,6 +203,22 @@ def t_surplus(ctx: ToolContext, a: SupplierArgs) -> tuple[dict, str]:
     )
 
 
+def t_market(ctx: ToolContext, a: SkuArgs) -> tuple[dict, str]:
+    if a.sku not in {line["sku"] for line in ctx.procurement.requirements["lines"]}:
+        raise AppError("sku_not_in_basket", f"{a.sku} is not in the confirmed basket.", 422)
+    product = ctx.db.scalar(select(Product).where(Product.session_id == ctx.session.id, Product.sku == a.sku))
+    # Look up first, charge after: a failed provider call costs the owner nothing.
+    result = price_check(a.sku, product.name, ctx.settings)
+    usage = charge(ctx.db, ctx.session.id, ctx.run.id, f"{ctx.run.id}:{ctx.seq + 1}", "market.price_check")
+    ctx.run.tool_spend_cents += usage.price_cents
+    ctx.market_facts.append(result)
+    label = "Channel3" if result["source"] == "channel3" else "fixture data"
+    median = _money(result["median_cents"]) if result["median_cents"] else "n/a"
+    return {**result, "charged_cents": usage.price_cents}, (
+        f"Market check {a.sku} ({label}): {result['listing_count']} listings, median {median} (paid {usage.price_cents}¢)"
+    )
+
+
 def t_compare(ctx: ToolContext, _: NoArgs) -> tuple[dict, str]:
     result = compare(ctx.db, ctx.procurement)
     ctx.last_comparison = result
@@ -244,7 +266,8 @@ def ungrounded_amounts(text: str, comparison: dict) -> list[str]:
 
 
 def t_propose(ctx: ToolContext, a: ProposeArgs) -> tuple[dict, str]:
-    bad = ungrounded_amounts(a.explanation, compare(ctx.db, ctx.procurement))
+    facts = {**compare(ctx.db, ctx.procurement), "market": ctx.market_facts}
+    bad = ungrounded_amounts(a.explanation, facts)
     if bad:
         raise AppError("ungrounded_explanation",
                        f"These amounts are not in any tool result: {', '.join(bad[:5])}. Use only server figures.", 422)
@@ -282,6 +305,12 @@ TOOLS: dict[str, ToolSpec] = {
     ),
     "get_compatible_surplus_offers": ToolSpec(
         SupplierArgs, t_surplus, "List a supplier's surplus items related to the basket, with compatibility verdicts."
+    ),
+    "check_market_price": ToolSpec(
+        SkuArgs,
+        t_market,
+        "Look up current retail listing prices for one basket SKU (reference only; does not change quotes or ranking). "
+        "Costs 2¢.",
     ),
     "compare_offers": ToolSpec(NoArgs, t_compare, "Deterministic feasibility check and ranking of current quotes."),
     "propose_purchase": ToolSpec(

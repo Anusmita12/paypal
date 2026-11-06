@@ -24,6 +24,7 @@ from app.models import (
     PURCHASE_TRANSITIONS,
     RESERVATION_TRANSITIONS,
     Capture,
+    DemoSession,
     FixtureProviderRecord,
     LedgerEntry,
     Product,
@@ -58,6 +59,8 @@ class PaymentProvider(Protocol):
     def get_order(self, order_id: str) -> dict: ...
     def capture_order(self, order_id: str, request_id: str) -> dict: ...
     def verify_webhook(self, headers: dict[str, str], event: dict) -> bool: ...
+    def create_payout(self, request_id: str, payload: dict) -> dict: ...
+    def get_payout(self, payout_batch_id: str) -> dict: ...
 
 
 def money(cents: int) -> str:
@@ -107,6 +110,34 @@ class FixturePayPal:
     def verify_webhook(self, headers: dict[str, str], event: dict) -> bool:
         """Offline stand-in for PayPal's verification endpoint (tests only)."""
         return headers.get("paypal-transmission-sig") == "fixture-valid"
+
+    def create_payout(self, request_id: str, payload: dict) -> dict:
+        self._fault("payout_timeout_before")
+        with get_sessionmaker()() as db:
+            prior = self._get(db, "payout_request", request_id)
+            if prior:
+                return copy.deepcopy(self._get(db, "payout", prior.data["batch_id"]).data)
+            batch_id = "FXPO" + secrets.token_hex(6).upper()
+            batch = {"batch_header": {"payout_batch_id": batch_id, "batch_status": "PENDING",
+                                      "sender_batch_header": payload["sender_batch_header"]},
+                     "items": copy.deepcopy(payload["items"])}
+            db.add(FixtureProviderRecord(kind="payout", key=batch_id, data=batch))
+            db.add(FixtureProviderRecord(kind="payout_request", key=request_id, data={"batch_id": batch_id}))
+            db.commit()
+        self._fault("payout_timeout_after_commit")
+        return copy.deepcopy(batch)
+
+    def get_payout(self, payout_batch_id: str) -> dict:
+        with get_sessionmaker()() as db:
+            rec = self._get(db, "payout", payout_batch_id)
+            if not rec:
+                raise ProviderRejected("RESOURCE_NOT_FOUND")
+            if rec.data["batch_header"]["batch_status"] == "PENDING":  # fixture batches settle on first read
+                data = copy.deepcopy(rec.data)
+                data["batch_header"]["batch_status"] = "SUCCESS"
+                rec.data = data
+                db.commit()
+            return copy.deepcopy(rec.data)
 
     def approve(self, order_id: str) -> dict:
         """Fixture-only stand-in for the buyer approving checkout on PayPal."""
@@ -214,7 +245,8 @@ def order_payload(purchase: Purchase, settings: Settings) -> dict:
         "reference_id": purchase.id,
         "custom_id": purchase.id,
         "invoice_id": f"TP-{purchase.id}",
-        "description": f"TradePilot restock from {snap['supplier']['name']}"[:127],
+        "description": (f"TradePilot restock from {snap['supplier']['name']}" if purchase.kind == "restock"
+                        else "TradePilot prepaid agent tool credit")[:127],
         "amount": {**usd(purchase.amount_cents), "breakdown": {
             "item_total": usd(snap["subtotal_cents"]),
             "shipping": usd(snap["shipping_cents"]),
@@ -223,7 +255,8 @@ def order_payload(purchase: Purchase, settings: Settings) -> dict:
         }},
         "items": [
             {"name": line["name"][:127], "sku": line["offered_sku"][:127], "quantity": str(line["qty"]),
-             "unit_amount": usd(line["unit_cents"]), "category": "PHYSICAL_GOODS"}
+             "unit_amount": usd(line["unit_cents"]),
+             "category": "PHYSICAL_GOODS" if purchase.kind == "restock" else "DIGITAL_GOODS"}
             for line in snap["lines"]
         ],
     }
@@ -247,12 +280,14 @@ def _operation(db: Session, purchase: Purchase, kind: str, payload: dict) -> Pro
     return op
 
 
-def _revalidate(db: Session, purchase: Purchase, now: datetime) -> Reservation:
-    """Before create and before capture: the approved snapshot is intact and its stock is still reserved."""
+def _revalidate(db: Session, purchase: Purchase, now: datetime) -> Reservation | None:
+    """Before create and before capture: the approved snapshot is intact and (for restocks) its stock is reserved."""
     if canonical_digest(purchase.snapshot) != purchase.digest or purchase.snapshot["total_cents"] != purchase.amount_cents:
         _manual_review(db, purchase, "snapshot_tampered", "system")
         db.commit()
         raise AppError("snapshot_mismatch", "Stored purchase snapshot does not match its approval.", 409)
+    if purchase.kind == "wallet_topup":
+        return None  # nothing to reserve: credit is created only when the capture is confirmed
     res = _reservation(db, purchase)
     if res is None or res.status != "held":
         raise AppError("reservation_invalid", "Supplier stock is no longer reserved for this purchase.", 409)
@@ -384,7 +419,8 @@ def capture(db: Session, session_id: str, purchase_id: str, provider: PaymentPro
             db.commit()
             raise AppError("order_mismatch", "The PayPal order does not match the approved total.", 409)
         # Pin stock: from here on an unknown outcome must not let TTL cleanup release it.
-        transition(res, "capture_in_progress", RESERVATION_TRANSITIONS, "reservation")
+        if res is not None:
+            transition(res, "capture_in_progress", RESERVATION_TRANSITIONS, "reservation")
         _set_status(p, "capture_pending")
         _event(db, p, "buyer_approved", "owner", "PayPal reports the buyer approved; capture started.")
     op = _operation(db, p, "capture_order", {"order_id": order_id})
@@ -448,10 +484,15 @@ def finalize_from_order(db: Session, purchase_id: str, order: dict, source: str)
             currency="USD", payee_merchant_id=payee, source=source,
         ).on_conflict_do_nothing())
         db.execute(insert(LedgerEntry).values(
-            session_id=p.session_id, business_key=f"purchase_paid:{p.id}", kind="purchase_paid",
+            session_id=p.session_id, business_key=f"purchase_paid:{p.id}",
+            kind="purchase_paid" if p.kind == "restock" else "wallet_topup",
             amount_cents=p.amount_cents, purchase_id=p.id,
             details={"order_id": order["id"], "capture_id": cap["id"], "supplier": p.snapshot.get("supplier", {}).get("id")},
         ).on_conflict_do_nothing())
+        if p.kind == "wallet_topup":
+            # Runs once: the locked purchase moves to paid in this same transaction.
+            db.execute(update(DemoSession).where(DemoSession.id == p.session_id)
+                       .values(wallet_balance_cents=DemoSession.wallet_balance_cents + p.amount_cents))
         if p.kind == "restock":
             res = _reservation(db, p)
             consume_reservation(db, res)

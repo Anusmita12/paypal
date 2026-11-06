@@ -258,11 +258,30 @@ export interface Purchase {
   ledger?: { kind: string; business_key: string; amount_cents: number; at: string }[];
 }
 
+export interface Payout {
+  payout_id: string;
+  provider_id: string;
+  amount_cents: number;
+  item_count: number;
+  receiver: string;
+  sender_batch_id: string;
+  status: "pending" | "submitted" | "unknown" | "success" | "failed" | "manual_review";
+  paypal_batch_id: string | null;
+  paypal_status: string | null;
+  payment_mode: string;
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+}
+
 export interface Wallet {
   balance_cents: number;
+  unsettled_cents: number;
+  topup_amounts_cents: number[];
   tools: { code: string; name: string; provider_id: string; provider_name: string; price_cents: number }[];
-  usage: { id: number; run_id: string | null; tool_code: string; tool_name: string; provider_id: string; price_cents: number; settled: boolean; at: string }[];
+  usage: { id: number; run_id: string | null; tool_code: string; tool_name: string; provider_id: string; price_cents: number; payout_status: string; at: string }[];
   ledger: { kind: string; amount_cents: number; details: Record<string, unknown>; at: string }[];
+  payouts: Payout[];
 }
 
 export interface ImportPreview {

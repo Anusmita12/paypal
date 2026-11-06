@@ -86,6 +86,14 @@ class SandboxPayPal:
             return self.get_order(order_id)
         return order
 
+    # --- Payouts ---
+
+    def create_payout(self, request_id: str, payload: dict) -> dict:
+        return self._call("POST", "/v1/payments/payouts", json=payload, headers={"PayPal-Request-Id": request_id})
+
+    def get_payout(self, payout_batch_id: str) -> dict:
+        return self._call("GET", f"/v1/payments/payouts/{_safe_id(payout_batch_id)}")
+
     # --- webhooks ---
 
     def verify_webhook(self, headers: dict[str, str], event: dict) -> bool:

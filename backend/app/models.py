@@ -477,6 +477,28 @@ class ToolUsage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class PayoutBatch(Base, TimestampMixin):
+    """One PayPal Payouts batch settling a provider's accrued tool earnings. Usage rows are claimed (payout_batch_id)
+    in the same transaction that creates the batch, so no usage can be paid twice."""
+
+    __tablename__ = "payout_batches"
+    __table_args__ = (CheckConstraint("amount_cents > 0", name="payout_amount_positive"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(ForeignKey("demo_sessions.id"), index=True)
+    provider_id: Mapped[str] = mapped_column(String(48))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    item_count: Mapped[int] = mapped_column(Integer)
+    receiver: Mapped[str] = mapped_column(String(254))
+    sender_batch_id: Mapped[str] = mapped_column(String(64), unique=True)  # stable across retries
+    status: Mapped[str] = mapped_column(String(24), default="pending")  # pending|submitted|unknown|success|failed|manual_review
+    paypal_batch_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    paypal_status: Mapped[str | None] = mapped_column(String(32))
+    payment_mode: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+
 class FixtureProviderRecord(Base):
     """Durable state for the offline PayPal fixture adapter (fixture mode and tests only)."""
 

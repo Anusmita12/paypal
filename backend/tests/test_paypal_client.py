@@ -82,3 +82,12 @@ def test_webhook_verification(client):
     route.respond(200, json={"verification_status": "FAILURE"})
     assert c.verify_webhook(headers, {"id": "WH-EVT"}) is False
     assert c.verify_webhook({}, {"id": "WH-EVT"}) is False  # missing headers never reach PayPal
+
+
+def test_payout_uses_stable_request_id(client):
+    c, mock = client
+    route = mock.post("/v1/payments/payouts").respond(
+        201, json={"batch_header": {"payout_batch_id": "PB1", "batch_status": "PENDING"}})
+    assert c.create_payout("tp-payout-x", {"sender_batch_header": {"sender_batch_id": "tp-payout-x"}, "items": []})[
+        "batch_header"]["payout_batch_id"] == "PB1"
+    assert route.calls.last.request.headers["PayPal-Request-Id"] == "tp-payout-x"

@@ -75,6 +75,7 @@ function PurchaseDetail({ ctx, p, setP, refresh }: { ctx: Ctx; p: Purchase; setP
     if (next) {
       setP(next);
       setAnnounce(msg);
+      if (next.status === "paid") ctx.refreshSession();
     }
     return next;
   }
@@ -106,9 +107,14 @@ function PurchaseDetail({ ctx, p, setP, refresh }: { ctx: Ctx; p: Purchase; setP
           </div>
         )}
         {p.status === "manual_review" && <div className="notice bad">Stopped for manual review. No automatic retries will move money for this purchase.</div>}
-        {paid && (
+        {paid && p.kind === "restock" && (
           <div className="notice ok" role="status">
             Paid. {s.lines?.reduce((a, l) => a + l.qty, 0)} units added to <strong>incoming</strong> stock (they count as on-hand only when received).
+          </div>
+        )}
+        {paid && p.kind === "wallet_topup" && (
+          <div className="notice ok" role="status">
+            Paid. {money(p.amount_cents)} added to the tool wallet. <button className="btn small" onClick={() => go({ page: "wallet" })}>Open wallet</button>
           </div>
         )}
       </section>

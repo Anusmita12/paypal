@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     paypal_merchant_id: str = ""
     paypal_webhook_id: str = ""
     paypal_api_base_url: str = PAYPAL_SANDBOX_BASE_URL
+    # Sandbox personal account email that receives provider Payouts in the demo (all simulated providers share it).
+    paypal_payout_receiver: str = ""
 
     channel3_mode: Literal["fixture", "live"] = "fixture"
     channel3_api_key: str = ""

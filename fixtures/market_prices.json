@@ -1,0 +1,32 @@
+{
+  "_note": "Synthetic retail listings for CHANNEL3_MODE=fixture. Shapes follow Channel3 search results (offers with domain, price.price, price.currency). Not real prices.",
+  "listings": {
+    "CHG-65W-PD": [
+      {"title": "65W USB-C GaN PD charger", "domain": "example-electronics.test", "price": 34.99},
+      {"title": "USB-C 65W wall charger, PD 3.0", "domain": "gadget-outlet.test", "price": 29.99},
+      {"title": "65W PD fast charger", "domain": "megamart.test", "price": 39.95},
+      {"title": "Compact 65W USB-C charger", "domain": "techhub.test", "price": 32.50},
+      {"title": "65W laptop/phone USB-C charger", "domain": "shopnow.test", "price": 27.99}
+    ],
+    "CBL-C2C-1M": [
+      {"title": "USB-C to USB-C cable 1m 60W", "domain": "example-electronics.test", "price": 9.99},
+      {"title": "1m USB-C cable, 60W PD", "domain": "megamart.test", "price": 7.49},
+      {"title": "USB-C 3ft charging cable", "domain": "shopnow.test", "price": 8.99}
+    ],
+    "CBL-C2L-1M": [
+      {"title": "MFi USB-C to Lightning cable 1m", "domain": "example-electronics.test", "price": 14.99},
+      {"title": "Lightning to USB-C cable, MFi certified", "domain": "gadget-outlet.test", "price": 12.99},
+      {"title": "USB-C Lightning 3ft MFi", "domain": "techhub.test", "price": 16.49}
+    ],
+    "EAR-BT-BASIC": [
+      {"title": "Bluetooth 5.3 wireless earbuds", "domain": "megamart.test", "price": 24.99},
+      {"title": "True wireless earbuds BT 5.3", "domain": "shopnow.test", "price": 19.99},
+      {"title": "Basic in-ear Bluetooth earbuds", "domain": "gadget-outlet.test", "price": 22.00}
+    ],
+    "PB-10K": [
+      {"title": "10000mAh USB-C power bank 20W", "domain": "example-electronics.test", "price": 25.99},
+      {"title": "Slim 10K power bank, 20W PD", "domain": "techhub.test", "price": 21.99},
+      {"title": "Portable charger 10000mAh", "domain": "megamart.test", "price": 19.49}
+    ]
+  }
+}

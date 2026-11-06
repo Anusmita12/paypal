@@ -36,3 +36,7 @@ class ApproveIn(Strict):
 class ImportIn(Strict):
     kind: Literal["inventory", "sales"]
     csv_text: str = Field(max_length=300_000)
+
+
+class TopupIn(Strict):
+    amount_cents: int

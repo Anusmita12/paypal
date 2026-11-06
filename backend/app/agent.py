@@ -48,7 +48,7 @@ def _money(c: int) -> str:
     return f"${c / 100:,.2f}"
 
 
-def fixture_explanation(comparison: dict) -> str:
+def fixture_explanation(comparison: dict, market: dict | None = None) -> str:
     """Deterministic template over comparison facts (fixture mode). No model wrote this."""
     best = next(o for o in comparison["offers"] if o["quote_id"] == comparison["best_quote_id"])
     parts = [
@@ -65,6 +65,11 @@ def fixture_explanation(comparison: dict) -> str:
         parts.append(
             f"Saves {_money(comparison['savings_cents'])} against the best current list-price basket "
             f"({comparison['baseline']['supplier_id']}, {_money(comparison['baseline']['total_cents'])})."
+        )
+    if market and market.get("median_cents"):
+        parts.append(
+            f"Market check ({'Channel3' if market['source'] == 'channel3' else 'fixture data'}): {market['sku']} retails "
+            f"at a median {_money(market['median_cents'])} across {market['listing_count']} listings."
         )
     for o in comparison["offers"]:
         if not o["feasible"]:
@@ -91,9 +96,12 @@ def fixture_driver(ctx: ToolContext) -> str:
             execute(ctx, "counteroffer", {"supplier_id": s["supplier_id"], "requested_discount_bps": ask, "surplus_skus": []})
     comparison = execute(ctx, "compare_offers", {})["data"]
     if comparison["best_quote_id"]:
-        execute(ctx, "propose_purchase", {"quote_id": comparison["best_quote_id"],
-                                          "explanation": fixture_explanation(comparison)})
-        return fixture_explanation(comparison)
+        # One retail reference check on the highest-value line, as a demo of a 2¢ paid data tool.
+        market = execute(ctx, "check_market_price", {"sku": "CHG-65W-PD"}) if any(
+            line["sku"] == "CHG-65W-PD" for line in ctx.procurement.requirements["lines"]) else {"ok": False}
+        explanation = fixture_explanation(comparison, market["data"] if market["ok"] else None)
+        execute(ctx, "propose_purchase", {"quote_id": comparison["best_quote_id"], "explanation": explanation})
+        return explanation
     return "No feasible offer. " + " ".join(comparison["suggestions"])
 
 

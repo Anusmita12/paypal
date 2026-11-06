@@ -260,13 +260,39 @@ const TOOL_LABEL: Record<string, string> = {
   get_compatible_surplus_offers: "surplus",
   compare_offers: "compare",
   propose_purchase: "propose",
+  check_market_price: "market",
 };
+
+const PAID = /\(paid (\d+)¢\)$/;
+
+/** Micro-payment ticker: each paid tool call as it is debited, built from the run's persisted events. */
+function SpendTicker({ p }: { p: Procurement }) {
+  const charges = p.events
+    .map((e) => ({ e, m: PAID.exec(e.summary) }))
+    .filter((x): x is { e: (typeof p.events)[number]; m: RegExpExecArray } => !!x.m);
+  if (charges.length === 0) return null;
+  return (
+    <div className="ticker" aria-label="Tool charges this run">
+      <span className="small" style={{ fontWeight: 600 }}>Micro-payments</span>
+      <ol className="ticker-list">
+        {charges.map(({ e, m }) => (
+          <li key={e.seq} className="fade-in" title={e.summary}>
+            <span className="mono">{e.tool === "check_market_price" ? "market" : String(e.arguments?.supplier_id ?? e.tool)}</span>
+            <strong>{m[1]}¢</strong>
+          </li>
+        ))}
+      </ol>
+      <strong className="ticker-total">{money(p.run?.tool_spend_cents ?? 0)}</strong>
+    </div>
+  );
+}
 
 function RunTimeline({ p }: { p: Procurement }) {
   const run = p.run!;
   const latest = p.events[p.events.length - 1];
   return (
     <div className="stack">
+      <SpendTicker p={p} />
       <div className="row small muted">
         <span>{run.tool_calls} tool calls</span>·<span>{money(run.tool_spend_cents)} tool spend</span>
         {run.input_tokens > 0 && <>·<span>{run.input_tokens + run.output_tokens} tokens</span></>}

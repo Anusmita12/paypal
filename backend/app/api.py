@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app import approvals, imports, payments, webhooks
+from app import approvals, imports, payments, payouts, webhooks
 from app.agent import start_run
 from app.compare import compare
 from app.config import Settings, get_settings
@@ -32,9 +32,10 @@ from app.models import (
 )
 from app.procurement import confirm_requirements, create_procurement, get_procurement
 from app.restock import FORMULA, WINDOW_DAYS, restock_lines, window
-from app.schemas import ApproveIn, ConfirmIn, CreateProcurementIn, ImportIn
+from app.schemas import ApproveIn, ConfirmIn, CreateProcurementIn, ImportIn, TopupIn
 from app.security import create_session, current_session
 from app.suppliers import apply_scenario, utcnow
+from app.wallet import TOPUP_AMOUNTS_CENTS, create_topup
 
 router = APIRouter(prefix="/api")
 
@@ -405,15 +406,38 @@ def evidence(purchase_id: str, format: str = Query("json", pattern="^(json|csv)$
 @router.get("/wallet")
 def wallet(s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
     tools = {t.code: t for t in db.scalars(select(PaidTool))}
+    batch_rows = payouts.batches_for(db, s.id)
+    batch_status = {b["payout_id"]: b["status"] for b in batch_rows}
     usage = db.scalars(select(ToolUsage).where(ToolUsage.session_id == s.id).order_by(ToolUsage.created_at.desc()).limit(500))
     ledger = db.scalars(select(LedgerEntry).where(LedgerEntry.session_id == s.id).order_by(LedgerEntry.created_at.desc()).limit(200))
     return {
         "balance_cents": s.wallet_balance_cents,
+        "unsettled_cents": payouts.unsettled_cents(db, s.id),
+        "topup_amounts_cents": list(TOPUP_AMOUNTS_CENTS),
         "tools": [{"code": t.code, "name": t.name, "provider_id": t.provider_id, "provider_name": t.provider_name,
                    "price_cents": t.price_cents} for t in tools.values()],
         "usage": [{"id": u.id, "run_id": u.run_id, "tool_code": u.tool_code, "tool_name": tools[u.tool_code].name,
-                   "provider_id": u.provider_id, "price_cents": u.price_cents, "settled": u.payout_batch_id is not None,
+                   "provider_id": u.provider_id, "price_cents": u.price_cents,
+                   "payout_status": batch_status.get(u.payout_batch_id, "accrued") if u.payout_batch_id else "accrued",
                    "at": u.created_at.isoformat()} for u in usage],
         "ledger": [{"kind": e.kind, "amount_cents": e.amount_cents, "details": e.details, "at": e.created_at.isoformat()}
                    for e in ledger],
+        "payouts": batch_rows,
     }
+
+
+@router.post("/wallet/topups")
+def topup(body: TopupIn, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    p = create_topup(db, s.id, body.amount_cents)
+    db.commit()
+    return _purchase_view(db, p, detail=True)
+
+
+@router.post("/wallet/settle")
+def settle(s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    return {"payouts": [payouts.view(b) for b in payouts.settle(db, s.id)]}
+
+
+@router.post("/wallet/payouts/{payout_id}/refresh")
+def refresh_payout(payout_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    return payouts.view(payouts.refresh(db, s.id, payout_id))

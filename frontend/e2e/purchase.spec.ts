@@ -52,14 +52,34 @@ test("main story: price change, re-run, approve and pay by keyboard", async ({ p
   await expect(row.locator('[col-id="on_hand"]')).toHaveText("6");
 });
 
-test("tool wallet shows metered agent calls", async ({ page }) => {
+test("pay-per-call: metered run, PayPal top-up, provider payouts", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Draft requirements" }).click();
   await page.getByRole("button", { name: "Confirm requirements" }).click();
   await page.getByRole("button", { name: "Run buyer agent" }).click();
   await expect(page.getByRole("button", { name: /Approve this purchase/ })).toBeVisible();
+  const ticker = page.getByLabel("Tool charges this run");
+  await expect(ticker.locator("li")).toHaveCount(8); // 3 quotes + 4 rounds at 1¢, one 2¢ market check
+  await expect(ticker).toContainText("$0.09");
+
   await page.getByRole("button", { name: "Tool wallet" }).click();
-  await expect(page.getByRole("heading", { name: "Tool wallet" })).toBeVisible();
-  await expect(page.getByText("$0.43")).toHaveCount(2); // header badge and wallet total: 50¢ grant − 7 paid calls
-  await expect(page.locator(".ag-center-cols-container .ag-row")).toHaveCount(7);
+  await expect(page.getByLabel("Balance")).toHaveText("$0.41"); // 50¢ synthetic grant − 9¢
+  await expect(page.locator(".ag-center-cols-container .ag-row")).toHaveCount(8);
+
+  // Top up $5 through the same checkout path (fixture PayPal stand-in).
+  await page.getByRole("button", { name: "$5.00" }).click();
+  await expect(page.getByRole("heading", { name: "Tool wallet top-up" })).toBeVisible();
+  await page.getByRole("button", { name: "Create checkout order" }).click();
+  await page.getByRole("button", { name: "Simulate buyer approval and capture" }).click();
+  await expect(page.getByText("$5.00 added to the tool wallet.")).toBeVisible();
+  await page.getByRole("button", { name: "Open wallet" }).click();
+  await expect(page.getByLabel("Balance")).toHaveText("$5.41");
+
+  // Settle providers once; the button then has nothing left to pay.
+  await page.getByRole("button", { name: "Settle 9¢ owed" }).click();
+  const payouts = page.getByRole("region", { name: "Provider payouts" });
+  await expect(payouts.locator("tbody tr")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Settle 0¢ owed" })).toBeDisabled();
+  await payouts.getByRole("button", { name: "Check status" }).first().click();
+  await expect(payouts.getByText("success")).toHaveCount(1);
 });

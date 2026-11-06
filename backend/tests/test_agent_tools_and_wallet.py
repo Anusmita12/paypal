@@ -121,7 +121,8 @@ def test_fixture_run_records_public_events_and_spend(api):
 
     d = run_buyer(api, confirmed_procurement(api)["procurement_id"])
     assert d["run"]["status"] == "succeeded" and d["run"]["mode"] == "fixture"
-    assert d["run"]["tool_spend_cents"] == 7  # 3 quotes + 4 negotiation rounds at 1¢
-    assert api.get("/api/wallet").json()["balance_cents"] == 43
+    assert d["run"]["tool_spend_cents"] == 9  # 3 quotes + 4 negotiation rounds at 1¢ + one 2¢ market check
+    assert api.get("/api/wallet").json()["balance_cents"] == 41
+    assert "market.price_check" in [u["tool_code"] for u in api.get("/api/wallet").json()["usage"]]
     tools = [e["tool"] for e in d["events"] if e["kind"] == "tool_call"]
     assert tools[0] == "get_inventory_snapshot" and tools[-1] == "propose_purchase"
