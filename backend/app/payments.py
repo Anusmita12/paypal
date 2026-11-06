@@ -8,7 +8,7 @@ Capture responses, webhooks and reconciliation all finalize through the same fun
 
 import copy
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 
 from sqlalchemy import select, update
@@ -61,6 +61,9 @@ class PaymentProvider(Protocol):
     def verify_webhook(self, headers: dict[str, str], event: dict) -> bool: ...
     def create_payout(self, request_id: str, payload: dict) -> dict: ...
     def get_payout(self, payout_batch_id: str) -> dict: ...
+    def track_order(self, order_id: str, request_id: str, payload: dict) -> dict: ...
+    def get_dispute(self, dispute_id: str) -> dict: ...
+    def provide_evidence(self, dispute_id: str, request_id: str, evidences: list[dict]) -> dict: ...
 
 
 def money(cents: int) -> str:
@@ -138,6 +141,59 @@ class FixturePayPal:
                 rec.data = data
                 db.commit()
             return copy.deepcopy(rec.data)
+
+    def track_order(self, order_id: str, request_id: str, payload: dict) -> dict:
+        self._fault("track_timeout_before")
+        with get_sessionmaker()() as db:
+            if not self._get(db, "order", order_id):
+                raise ProviderRejected("RESOURCE_NOT_FOUND")
+            prior = self._get(db, "tracker", request_id)
+            if not prior:
+                db.add(FixtureProviderRecord(kind="tracker", key=request_id, data={"order_id": order_id, **payload}))
+                db.commit()
+        return {"id": order_id, "status": "COMPLETED"}
+
+    def open_dispute(self, order_id: str, reason: str) -> str:
+        """Fixture-only stand-in for a buyer opening a dispute in PayPal's Resolution Center."""
+        with get_sessionmaker()() as db:
+            order = self._get(db, "order", order_id)
+            cap = order.data["purchase_units"][0]["payments"]["captures"][0]
+            dispute_id = "PP-D-FX" + secrets.token_hex(4).upper()
+            db.add(FixtureProviderRecord(kind="dispute", key=dispute_id, data={
+                "dispute_id": dispute_id, "reason": reason, "status": "WAITING_FOR_SELLER_RESPONSE",
+                "dispute_life_cycle_stage": "INQUIRY", "dispute_amount": cap["amount"],
+                "seller_response_due_date": (utcnow() + timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                "disputed_transactions": [{"seller_transaction_id": cap["id"]}], "evidences": [],
+                "links": [{"rel": "provide_evidence", "method": "POST",
+                           "href": f"/v1/customer/disputes/{dispute_id}/provide-evidence"}],
+            }))
+            db.commit()
+        return dispute_id
+
+    def get_dispute(self, dispute_id: str) -> dict:
+        with get_sessionmaker()() as db:
+            rec = self._get(db, "dispute", dispute_id)
+            if not rec:
+                raise ProviderRejected("RESOURCE_NOT_FOUND")
+            return copy.deepcopy(rec.data)
+
+    def provide_evidence(self, dispute_id: str, request_id: str, evidences: list[dict]) -> dict:
+        self._fault("evidence_timeout_before")
+        with get_sessionmaker()() as db:
+            rec = self._get(db, "dispute", dispute_id)
+            if not rec:
+                raise ProviderRejected("RESOURCE_NOT_FOUND")
+            if not self._get(db, "evidence_request", request_id):
+                if rec.data["status"] != "WAITING_FOR_SELLER_RESPONSE":
+                    raise ProviderRejected("NOT_ELIGIBLE", "Dispute is not waiting for seller evidence.")
+                data = copy.deepcopy(rec.data)
+                data["evidences"] += [{**e, "source": "SUBMITTED_BY_SELLER"} for e in evidences]
+                data["status"], data["links"] = "UNDER_REVIEW", []
+                rec.data = data
+                db.add(FixtureProviderRecord(kind="evidence_request", key=request_id, data={"dispute_id": dispute_id}))
+                db.commit()
+        self._fault("evidence_timeout_after_commit")
+        return {"links": [{"rel": "self", "href": f"/v1/customer/disputes/{dispute_id}"}]}
 
     def approve(self, order_id: str) -> dict:
         """Fixture-only stand-in for the buyer approving checkout on PayPal."""

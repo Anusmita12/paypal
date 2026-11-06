@@ -11,8 +11,10 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "ag-grid-community": "^33.3.2",
-    "ag-grid-react": "^33.3.2",
+    "ag-grid-community": "~36.3.0",
+    "ag-grid-react": "~36.3.0",
+    "ag-studio": "^3.1.0",
+    "ag-studio-react": "^3.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

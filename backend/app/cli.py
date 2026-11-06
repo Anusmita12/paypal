@@ -44,6 +44,7 @@ def seed() -> int:
 
 def run_jobs() -> int:
     import app.agent
+    import app.disputes
     import app.payments
     import app.webhooks  # noqa: F401
     from app.jobs import drain

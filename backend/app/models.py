@@ -477,6 +477,55 @@ class ToolUsage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Shipment(Base, TimestampMixin):
+    """Simulated supplier shipment for a paid restock, with its tracking pushed to the PayPal order."""
+
+    __tablename__ = "shipments"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    purchase_id: Mapped[str] = mapped_column(ForeignKey("purchases.id"), unique=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("demo_sessions.id"), index=True)
+    carrier: Mapped[str] = mapped_column(String(32))  # PayPal carrier enum; OTHER for the demo freight line
+    carrier_name_other: Mapped[str | None] = mapped_column(String(64))
+    tracking_number: Mapped[str] = mapped_column(String(64), unique=True)
+    shipped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tracker_state: Mapped[str] = mapped_column(String(16), default="pending")  # pending|pushed|unknown|failed
+    tracker_request_id: Mapped[str] = mapped_column(String(64), unique=True)
+    tracker_error: Mapped[str | None] = mapped_column(Text)
+
+
+class Dispute(Base, TimestampMixin):
+    """A buyer dispute on a captured payment, and the seller's evidence workflow for it."""
+
+    __tablename__ = "disputes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    paypal_dispute_id: Mapped[str] = mapped_column(String(64), unique=True)
+    session_id: Mapped[str | None] = mapped_column(ForeignKey("demo_sessions.id"), index=True)
+    purchase_id: Mapped[str | None] = mapped_column(ForeignKey("purchases.id"), index=True)
+    reason: Mapped[str] = mapped_column(String(64))
+    paypal_status: Mapped[str] = mapped_column(String(48))
+    lifecycle_stage: Mapped[str | None] = mapped_column(String(32))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(3))
+    seller_response_due: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # open -> drafting -> draft_ready -> submitting -> submitted | unknown | failed; any -> resolved
+    status: Mapped[str] = mapped_column(String(24), default="open")
+    draft: Mapped[dict | None] = mapped_column(Json)
+    draft_digest: Mapped[str | None] = mapped_column(String(64))
+    draft_error: Mapped[str | None] = mapped_column(Text)
+    approved_digest: Mapped[str | None] = mapped_column(String(64))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submission_request_id: Mapped[str] = mapped_column(String(64), unique=True)
+    submission_error: Mapped[str | None] = mapped_column(Text)
+    payment_mode: Mapped[str] = mapped_column(String(16))
+    provider_snapshot: Mapped[dict] = mapped_column(Json, default=dict)  # redacted provider fields
+    row_version: Mapped[int] = mapped_column(Integer, default=1)
+
+    __mapper_args__ = {"version_id_col": row_version}  # noqa: RUF012 - SQLAlchemy declarative idiom
+
+
 class PayoutBatch(Base, TimestampMixin):
     """One PayPal Payouts batch settling a provider's accrued tool earnings. Usage rows are claimed (payout_batch_id)
     in the same transaction that creates the batch, so no usage can be paid twice."""

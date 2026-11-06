@@ -4,6 +4,7 @@ Error mapping keeps the payment rules honest: timeouts, connection failures, 429
 (outcome unknown, reconcile later); 4xx answers are `ProviderRejected` with PayPal's issue code.
 """
 
+import json as json_module
 import threading
 import time
 from typing import Any
@@ -50,12 +51,14 @@ class SandboxPayPal:
                           client_id=self.settings.paypal_client_id)
             return _token["value"]
 
-    def _call(self, method: str, path: str, *, json: Any = None, headers: dict | None = None) -> dict:
+    def _call(self, method: str, path: str, *, json: Any = None, headers: dict | None = None,
+              files: dict | None = None) -> dict:
         for attempt in (1, 2):
-            h = {"Authorization": f"Bearer {self._access_token(force=attempt == 2)}", "Content-Type": "application/json",
-                 **(headers or {})}
+            h = {"Authorization": f"Bearer {self._access_token(force=attempt == 2)}", **(headers or {})}
+            if files is None:
+                h["Content-Type"] = "application/json"
             try:
-                r = self.http.request(method, path, json=json, headers=h)
+                r = self.http.request(method, path, json=json, headers=h, files=files)
             except httpx.HTTPError as exc:
                 # A request that may have reached PayPal has an unknown outcome.
                 raise ProviderTimeout(f"{method} {path}: {type(exc).__name__}") from exc
@@ -94,6 +97,21 @@ class SandboxPayPal:
     def get_payout(self, payout_batch_id: str) -> dict:
         return self._call("GET", f"/v1/payments/payouts/{_safe_id(payout_batch_id)}")
 
+    # --- shipment tracking and disputes ---
+
+    def track_order(self, order_id: str, request_id: str, payload: dict) -> dict:
+        return self._call("POST", f"/v2/checkout/orders/{_safe_id(order_id)}/track", json=payload,
+                          headers={"PayPal-Request-Id": request_id})
+
+    def get_dispute(self, dispute_id: str) -> dict:
+        return self._call("GET", f"/v1/customer/disputes/{_safe_dispute_id(dispute_id)}")
+
+    def provide_evidence(self, dispute_id: str, request_id: str, evidences: list[dict]) -> dict:
+        # multipart/form-data with the evidence JSON in the `input` part (no document upload).
+        files = {"input": (None, json_module.dumps({"evidences": evidences}), "application/json")}
+        return self._call("POST", f"/v1/customer/disputes/{_safe_dispute_id(dispute_id)}/provide-evidence",
+                          files=files, headers={"PayPal-Request-Id": request_id})
+
     # --- webhooks ---
 
     def verify_webhook(self, headers: dict[str, str], event: dict) -> bool:
@@ -118,6 +136,12 @@ class SandboxPayPal:
 def _safe_id(value: str) -> str:
     if not value.isalnum() or len(value) > 64:
         raise ProviderRejected("INVALID_RESOURCE_ID", "Malformed PayPal ID.")
+    return value
+
+
+def _safe_dispute_id(value: str) -> str:
+    if not all(c.isalnum() or c == "-" for c in value) or len(value) > 64:
+        raise ProviderRejected("INVALID_RESOURCE_ID", "Malformed dispute ID.")
     return value
 
 

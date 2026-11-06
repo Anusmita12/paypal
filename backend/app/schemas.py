@@ -40,3 +40,12 @@ class ImportIn(Strict):
 
 class TopupIn(Strict):
     amount_cents: int
+
+
+class SimulateDisputeIn(Strict):
+    reason: Literal["MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED"] = (
+        "MERCHANDISE_OR_SERVICE_NOT_RECEIVED")
+
+
+class DisputeApproveIn(Strict):
+    digest: str = Field(min_length=64, max_length=64)

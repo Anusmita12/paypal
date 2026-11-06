@@ -1,6 +1,7 @@
 """Bounded buyer-agent runs. Fixture mode drives the real tools with a deterministic script; anthropic mode
 lets Claude or Gemini choose tool calls (see `model_driver`). Both share `agent_tools.execute` and its limits."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -13,6 +14,7 @@ from app.jobs import enqueue, handler
 from app.models import PROPOSAL_TRANSITIONS, AgentRun, DemoSession, Procurement, Proposal, transition
 from app.procurement import set_procurement_status
 
+log = logging.getLogger("tradepilot.agent")
 RUNNABLE = {"draft", "no_feasible_offer", "failed", "awaiting_approval"}
 
 
@@ -142,6 +144,13 @@ def run_agent_job(db: Session, payload: dict) -> None:
         db.rollback()
         ctx.event("error", exc.message, ok=False)
         _finish(db, run, procurement, "failed", exc.code, exc.message)
+        return
+    except Exception as exc:
+        db.rollback()
+        log.exception("agent run %s crashed", run.id)
+        message = f"Unexpected error: {type(exc).__name__}"
+        ctx.event("error", message, ok=False)
+        _finish(db, run, procurement, "failed", "internal_error", message)
         return
     db.refresh(procurement)
     if ctx.proposal_id:

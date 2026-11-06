@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app import approvals, imports, payments, payouts, webhooks
+from app import approvals, disputes, imports, payments, payouts, webhooks
 from app.agent import start_run
 from app.compare import compare
 from app.config import Settings, get_settings
@@ -17,6 +17,7 @@ from app.models import (
     AgentRun,
     Capture,
     DemoSession,
+    Dispute,
     LedgerEntry,
     NegotiationRound,
     PaidTool,
@@ -27,12 +28,21 @@ from app.models import (
     PurchaseEvent,
     Quote,
     Reservation,
+    Shipment,
     Supplier,
     ToolUsage,
 )
 from app.procurement import confirm_requirements, create_procurement, get_procurement
 from app.restock import FORMULA, WINDOW_DAYS, restock_lines, window
-from app.schemas import ApproveIn, ConfirmIn, CreateProcurementIn, ImportIn, TopupIn
+from app.schemas import (
+    ApproveIn,
+    ConfirmIn,
+    CreateProcurementIn,
+    DisputeApproveIn,
+    ImportIn,
+    SimulateDisputeIn,
+    TopupIn,
+)
 from app.security import create_session, current_session
 from app.suppliers import apply_scenario, utcnow
 from app.wallet import TOPUP_AMOUNTS_CENTS, create_topup
@@ -441,3 +451,56 @@ def settle(s: DemoSession = Depends(current_session), db: Session = Depends(get_
 @router.post("/wallet/payouts/{payout_id}/refresh")
 def refresh_payout(payout_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
     return payouts.view(payouts.refresh(db, s.id, payout_id))
+
+
+# --- fulfilment and disputes (storefront / seller side) ---
+
+
+def _shipment_view(s) -> dict:
+    return {"tracking_number": s.tracking_number, "carrier": s.carrier_name_other or s.carrier,
+            "shipped_at": s.shipped_at.isoformat(), "delivered_at": s.delivered_at.isoformat() if s.delivered_at else None,
+            "tracker_state": s.tracker_state, "tracker_error": s.tracker_error}
+
+
+@router.post("/purchases/{purchase_id}/ship")
+def ship(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    return _shipment_view(disputes.ship(db, s.id, purchase_id))
+
+
+@router.post("/purchases/{purchase_id}/deliver")
+def deliver(purchase_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    return _shipment_view(disputes.mark_delivered(db, s.id, purchase_id))
+
+
+@router.post("/purchases/{purchase_id}/simulate-dispute")
+def simulate_dispute(purchase_id: str, body: SimulateDisputeIn, s: DemoSession = Depends(current_session),
+                     db: Session = Depends(get_db)) -> dict:
+    return disputes.view(disputes.simulate_dispute(db, s.id, purchase_id, body.reason))
+
+
+@router.get("/disputes")
+def list_disputes(s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    rows = db.scalars(select(Dispute).where(Dispute.session_id == s.id).order_by(Dispute.created_at.desc()))
+    out = []
+    for d in rows:
+        v = disputes.view(d)
+        sh = db.scalar(select(Shipment).where(Shipment.purchase_id == d.purchase_id)) if d.purchase_id else None
+        v["shipment"] = _shipment_view(sh) if sh else None
+        out.append(v)
+    return {"disputes": out}
+
+
+@router.post("/disputes/{dispute_id}/draft")
+def draft_dispute(dispute_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    return disputes.view(disputes.request_draft(db, s.id, dispute_id))
+
+
+@router.post("/disputes/{dispute_id}/approve")
+def approve_dispute(dispute_id: str, body: DisputeApproveIn, s: DemoSession = Depends(current_session),
+                    db: Session = Depends(get_db)) -> dict:
+    return disputes.view(disputes.approve_and_submit(db, s.id, dispute_id, body.digest))
+
+
+@router.post("/disputes/{dispute_id}/refresh")
+def refresh_dispute(dispute_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    return disputes.view(disputes.refresh(db, s.id, dispute_id))

@@ -16,6 +16,7 @@ from app.payments import ProviderTimeout, finalize_from_order, get_provider
 CAPTURE_EVENTS = {"PAYMENT.CAPTURE.COMPLETED", "PAYMENT.CAPTURE.PENDING", "PAYMENT.CAPTURE.DENIED",
                   "PAYMENT.CAPTURE.DECLINED"}
 ORDER_EVENTS = {"CHECKOUT.ORDER.APPROVED", "CHECKOUT.ORDER.COMPLETED"}
+DISPUTE_EVENTS = {"CUSTOMER.DISPUTE.CREATED", "CUSTOMER.DISPUTE.UPDATED", "CUSTOMER.DISPUTE.RESOLVED"}
 HEADERS = ("paypal-auth-algo", "paypal-cert-url", "paypal-transmission-id", "paypal-transmission-sig",
            "paypal-transmission-time")
 
@@ -61,6 +62,13 @@ def process(db: Session, payload: dict) -> None:
     if ev is None or ev.status in ("processed", "ignored"):
         return
     event = ev.payload
+    if event["event_type"] in DISPUTE_EVENTS:
+        dispute_id = (event.get("resource") or {}).get("dispute_id")
+        if dispute_id:  # re-read the dispute from PayPal; the payload is only a pointer
+            enqueue(db, "ingest_dispute", {"paypal_dispute_id": str(dispute_id)[:64]}, dedupe_key=f"dispute:{dispute_id}")
+        ev.status, ev.processed_at = ("processed" if dispute_id else "ignored"), datetime.now(UTC)
+        db.commit()
+        return
     order_id = _order_id(event)
     purchase = db.scalar(select(Purchase).where(Purchase.paypal_order_id == order_id)) if order_id else None
     if event["event_type"] not in CAPTURE_EVENTS | ORDER_EVENTS or purchase is None:

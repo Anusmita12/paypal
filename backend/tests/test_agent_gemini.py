@@ -92,3 +92,14 @@ def test_gemini_rate_limit_fails_the_run_visibly(api, gemini_mode):
     d = run(api)
     assert d["run"]["status"] == "failed" and d["run"]["error_code"] == "model_rate_limited"
     assert d["proposal"] is None
+
+
+def test_unexpected_crash_marks_the_run_failed(api, gemini_mode):
+    class Broken(FakeGemini):
+        def generate_content(self, **_):
+            raise ValueError("boom")
+
+    gemini_mode(Broken([]))
+    d = run(api)
+    assert d["run"]["status"] == "failed" and d["run"]["error_code"] == "internal_error"
+    assert d["status"] == "failed"
