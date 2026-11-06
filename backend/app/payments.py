@@ -381,7 +381,7 @@ def capture(db: Session, session_id: str, purchase_id: str, provider: PaymentPro
         # Pin stock: from here on an unknown outcome must not let TTL cleanup release it.
         transition(res, "capture_in_progress", RESERVATION_TRANSITIONS, "reservation")
         _set_status(p, "capture_pending")
-        _event(db, p, "buyer_approved", "owner", "Buyer approved on PayPal; capture started.")
+        _event(db, p, "buyer_approved", "owner", "PayPal reports the buyer approved; capture started.")
     op = _operation(db, p, "capture_order", {"order_id": order_id})
     op.attempts += 1
     request_id = op.request_id

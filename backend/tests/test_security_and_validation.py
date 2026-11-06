@@ -81,3 +81,9 @@ def test_scenarios_cannot_touch_payments(api):
 def test_ready_reports_migration(api):
     r = api.get("/api/ready")
     assert r.status_code == 200 and r.json()["status"] == "ready"
+
+
+def test_relative_deadline_hint_is_a_suggestion_only(api):
+    p = api.post("/api/procurements", {"request_text": "Restock under $500, delivered within 3 days"}).json()
+    assert p["status"] == "needs_input" and p["requirements"] is None
+    assert p["proposed"]["deadline"] == "2026-11-07" and p["proposed"]["budget_cents"] == 50_000

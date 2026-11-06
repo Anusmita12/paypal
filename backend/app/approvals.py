@@ -19,6 +19,7 @@ from app.models import (
     Procurement,
     Proposal,
     Purchase,
+    PurchaseEvent,
     Quote,
     Reservation,
     Supplier,
@@ -196,6 +197,10 @@ def approve(
             expires_at=now + timedelta(minutes=settings.reservation_minutes),
         )
     )
+    db.add(PurchaseEvent(purchase_id=purchase.id, kind="approved", source="owner",
+                         summary=f"Owner approved proposal v{proposal.version} for ${purchase.amount_cents / 100:,.2f}; "
+                                 f"supplier stock reserved for {settings.reservation_minutes} min.",
+                         data={"digest": digest}))
     transition(proposal, "approved", PROPOSAL_TRANSITIONS, "proposal")
     set_procurement_status(procurement, "approved", None)
     db.flush()

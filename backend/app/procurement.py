@@ -27,6 +27,7 @@ DEFAULT_COVERAGE_DAYS = 14
 
 _NON_USD = re.compile(r"(€|£|₹|¥|\b(eur|euros?|gbp|pounds?|inr|rupees?|rs\.?|jpy|yen|cad|aud)\b)", re.IGNORECASE)
 _USD_AMOUNT = re.compile(r"(?:\$\s?(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)|(\d{1,6}(?:\.\d{1,2})?)\s?(?:usd|dollars?)\b)", re.IGNORECASE)
+_WITHIN_DAYS = re.compile(r"\b(?:within|in)\s+(\d{1,2})\s+days?\b", re.IGNORECASE)
 _WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
@@ -47,6 +48,11 @@ def suggest_from_text(text: str, business_date: date) -> dict:
         hints["notes"].append("Budget suggested from your text. Confirm it before suppliers are contacted.")
     elif len(amounts) > 1:
         hints["notes"].append("Several amounts found; enter the budget explicitly.")
+    within = _WITHIN_DAYS.search(text)
+    if within and 1 <= int(within.group(1)) <= MAX_DEADLINE_DAYS:
+        hints["deadline"] = (business_date + timedelta(days=int(within.group(1)))).isoformat()
+        hints["notes"].append(f"Deadline suggested as {within.group(1)} days after the business date. Confirm the exact date.")
+        return hints
     for i, name in enumerate(_WEEKDAYS):
         if re.search(rf"\b{name}\b", text, re.IGNORECASE):
             days_ahead = (i - business_date.weekday()) % 7 or 7
@@ -60,7 +66,7 @@ def create_procurement(db: Session, session: DemoSession, request_text: str, lan
     if len(request_text) > 2000:
         raise AppError("request_too_long", "Keep the request under 2000 characters.")
     lines = [
-        {"sku": line.sku, "qty": line.need}
+        {"sku": line.sku, "name": line.name, "qty": line.need}
         for line in restock_lines(db, session.id, session.business_date, DEFAULT_COVERAGE_DAYS)
         if line.need > 0
     ]

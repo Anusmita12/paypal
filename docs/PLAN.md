@@ -151,8 +151,18 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
 - [x] Phase 1 — Domain core (35 pytest tests passing; fixture buyer run reproduces $470 → $525 / $510 → $488 / C rejected)
   - Decision: negotiation limit is 3 rounds per supplier **per run** (a re-run after changed terms may negotiate again).
   - Decision: each new demo session gets a 50¢ synthetic starter tool credit (ledger kind `wallet_grant`, not PayPal money).
-  - Not yet built: CSV imports (preview/apply) — moved to Phase 2 with the UI.
-- [ ] Phase 2 — Offline product
+  - CSV imports moved to Phase 2 (done there).
+- [x] Phase 2 — Offline product (verified 2026-11-06)
+  - Backend: fixture PayPal adapter (Orders v2 shapes, request-ID idempotency, one-shot fault injection), create order / capture
+    with persisted intent, one shared `finalize_from_order` used by capture, reconciliation (and Phase 3 webhooks), reconcile job
+    + `reconcile-pending` CLI, purchase event timeline, evidence JSON/CSV, CSV imports preview/apply, TTL maintenance loop.
+  - UI: React + strict TS + Vite, AG Grid Community (inventory grid, offer grid, tool-usage grid), requirement confirmation, agent
+    timeline, negotiation table, exact-cart approval, two-step checkout, fixture buyer stand-in (clearly labeled), PayPal JS SDK
+    buttons wired for Sandbox (unverified until Phase 3), purchases + evidence, tool wallet, scenarios, mobile offer summary.
+  - Tests: 50 pytest (incl. lost create/capture responses, concurrent captures, duplicate finalization, amount mismatch → manual
+    review, expired reservation, cross-session), 3 Playwright (main story by keyboard, wallet metering, mobile layout).
+  - Decision: added "within N days" deadline hint; the sample request uses it so the demo works on any business date.
+  - Decision: supplier terms are frozen during the reservation window; create/capture revalidate snapshot digest + reservation.
 - [ ] Phase 3 — Real AI + PayPal
 - [ ] Phase 4 — Pay-per-call
 - [ ] Phase 5 — Disputes + dashboard
