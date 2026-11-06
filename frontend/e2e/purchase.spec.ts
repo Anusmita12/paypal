@@ -47,9 +47,9 @@ test("main story: price change, re-run, approve and pay by keyboard", async ({ p
 
   // Incoming rises once by the paid quantity; on-hand does not change.
   await page.getByRole("button", { name: "Inventory" }).click();
-  const row = page.locator('.ag-center-cols-container [row-id="CHG-65W-PD"]');
-  await expect(row.locator('[col-id="incoming"]')).toHaveText("10");
-  await expect(row.locator('[col-id="on_hand"]')).toHaveText("6");
+  // Stable AG Grid attributes (row-id / col-id) rather than internal container class names.
+  await expect(page.locator('[row-id="CHG-65W-PD"] [col-id="incoming"]')).toHaveText("10");
+  await expect(page.locator('[row-id="CHG-65W-PD"] [col-id="on_hand"]')).toHaveText("6");
 });
 
 test("pay-per-call: metered run, PayPal top-up, provider payouts", async ({ page }) => {
@@ -64,7 +64,7 @@ test("pay-per-call: metered run, PayPal top-up, provider payouts", async ({ page
 
   await page.getByRole("button", { name: "Tool wallet" }).click();
   await expect(page.getByLabel("Balance")).toHaveText("$0.41"); // 50¢ synthetic grant − 9¢
-  await expect(page.locator(".ag-center-cols-container .ag-row")).toHaveCount(8);
+  await expect(page.locator('[role="row"][row-id]')).toHaveCount(8);
 
   // Top up $5 through the same checkout path (fixture PayPal stand-in).
   await page.getByRole("button", { name: "$5.00" }).click();

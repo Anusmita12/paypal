@@ -324,6 +324,10 @@ def _purchase_view(db: Session, p: Purchase, detail: bool = False) -> dict:
         ]
         view["capture"] = cap and {"id": cap.id, "status": cap.status, "amount_cents": cap.amount_cents,
                                    "currency": cap.currency, "source": cap.source, "at": cap.created_at.isoformat()}
+        sh = db.scalar(select(Shipment).where(Shipment.purchase_id == p.id))
+        view["shipment"] = _shipment_view(sh) if sh else None
+        view["disputes"] = [{"dispute_id": d.id, "paypal_dispute_id": d.paypal_dispute_id, "status": d.status}
+                            for d in db.scalars(select(Dispute).where(Dispute.purchase_id == p.id))]
         view["ledger"] = [
             {"kind": e.kind, "business_key": e.business_key, "amount_cents": e.amount_cents, "at": e.created_at.isoformat()}
             for e in db.scalars(select(LedgerEntry).where(LedgerEntry.purchase_id == p.id))

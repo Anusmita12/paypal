@@ -256,6 +256,8 @@ export interface Purchase {
   operations?: { kind: string; request_id: string; state: string; attempts: number; payload_digest: string; last_error: string | null }[];
   capture?: { id: string; status: string; amount_cents: number; currency: string; source: string; at: string } | null;
   ledger?: { kind: string; business_key: string; amount_cents: number; at: string }[];
+  shipment?: Shipment | null;
+  disputes?: { dispute_id: string; paypal_dispute_id: string; status: string }[];
 }
 
 export interface Payout {
@@ -292,4 +294,47 @@ export interface ImportPreview {
   error_count: number;
   errors: { row: number; message: string }[];
   rows_preview: Record<string, unknown>[];
+}
+
+export interface Shipment {
+  tracking_number: string;
+  carrier: string;
+  shipped_at: string;
+  delivered_at: string | null;
+  tracker_state: "pending" | "pushed" | "unknown" | "failed";
+  tracker_error: string | null;
+}
+
+export interface DisputeRecord {
+  id: string;
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface Dispute {
+  dispute_id: string;
+  paypal_dispute_id: string;
+  purchase_id: string | null;
+  reason: string;
+  paypal_status: string;
+  lifecycle_stage: string | null;
+  amount_cents: number;
+  currency: string;
+  seller_response_due: string | null;
+  status: "open" | "drafting" | "draft_ready" | "submitting" | "submitted" | "unknown" | "failed" | "resolved";
+  draft: {
+    model: string;
+    records: DisputeRecord[];
+    draft: { recommendation: "contest" | "accept"; summary: string; claims: { text: string; citations: string[] }[] };
+    submission: { evidence_type: string; notes: string; evidence_info?: { tracking_info: { tracking_number: string; carrier_name: string }[] } }[];
+    created_at: string;
+  } | null;
+  draft_digest: string | null;
+  draft_error: string | null;
+  approved_at: string | null;
+  submission_error: string | null;
+  payment_mode: string;
+  can_provide_evidence: boolean | null;
+  created_at: string;
+  shipment?: Shipment | null;
 }

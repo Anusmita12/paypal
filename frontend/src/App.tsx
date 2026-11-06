@@ -7,18 +7,21 @@ import InventoryPage from "./pages/Inventory";
 import ProcurementPage from "./pages/Procurement";
 import PurchasesPage from "./pages/Purchases";
 import WalletPage from "./pages/Wallet";
+import DisputesPage from "./pages/Disputes";
 
 export type Route =
   | { page: "inventory" }
   | { page: "procurement"; id?: string }
   | { page: "purchases"; id?: string }
-  | { page: "wallet" };
+  | { page: "wallet" }
+  | { page: "disputes"; id?: string };
 
 function parseHash(): Route {
   const [, page, id] = window.location.hash.replace(/^#/, "").split("/");
   if (page === "procurement") return { page, id };
   if (page === "purchases") return { page, id };
   if (page === "wallet") return { page };
+  if (page === "disputes") return { page, id };
   return { page: "inventory" };
 }
 
@@ -32,6 +35,7 @@ const NAV: { page: Route["page"]; label: string }[] = [
   { page: "procurement", label: "Procurement" },
   { page: "purchases", label: "Purchases" },
   { page: "wallet", label: "Tool wallet" },
+  { page: "disputes", label: "Disputes" },
 ];
 
 export interface Ctx {
@@ -124,6 +128,7 @@ export default function App() {
         {route.page === "procurement" && <ProcurementPage ctx={ctx} id={route.id} />}
         {route.page === "purchases" && <PurchasesPage ctx={ctx} id={route.id} />}
         {route.page === "wallet" && <WalletPage ctx={ctx} />}
+        {route.page === "disputes" && <DisputesPage ctx={ctx} id={route.id} />}
       </main>
     </div>
   );

@@ -159,6 +159,8 @@ function PurchaseDetail({ ctx, p, setP, refresh }: { ctx: Ctx; p: Purchase; setP
         </section>
       )}
 
+      {paid && p.kind === "restock" && <Fulfilment ctx={ctx} p={p} refresh={refresh} />}
+
       <section className="grid-2-even">
         <div className="panel stack" aria-labelledby="tl-h">
           <div className="row"><h2 id="tl-h">Payment timeline</h2><span className="spacer" />
@@ -253,5 +255,51 @@ function PayPalButtons({ ctx, p, onPaid, onError }: { ctx: Ctx; p: Purchase; onP
       {!ready && <Spinner label="Loading PayPal checkout…" />}
       <div ref={box} style={{ maxWidth: 360 }} />
     </div>
+  );
+}
+
+/** Storefront side after payment: simulated shipment, tracking pushed to the PayPal order, and dispute entry point. */
+function Fulfilment({ ctx, p, refresh }: { ctx: Ctx; p: Purchase; refresh: () => Promise<void> }) {
+  const act = useAction();
+  const sh = p.shipment;
+  const run = (path: string, body?: unknown) =>
+    act.run(async () => {
+      try {
+        const r = await api.post<{ dispute_id?: string }>(`/api/purchases/${p.purchase_id}/${path}`, body);
+        if (r.dispute_id) go({ page: "disputes", id: r.dispute_id });
+      } finally {
+        await refresh();
+      }
+    });
+  return (
+    <section className="panel stack" aria-labelledby="ff-h">
+      <div className="panel-head" style={{ marginBottom: 0 }}>
+        <h2 id="ff-h">Fulfilment</h2>
+        <Badge tone="warn">simulated carrier</Badge>
+      </div>
+      {sh ? (
+        <dl className="kv small">
+          <dt>Tracking</dt><dd className="mono">{sh.carrier} · {sh.tracking_number}</dd>
+          <dt>Shipped</dt><dd>{when(sh.shipped_at)}</dd>
+          <dt>Delivered</dt><dd>{sh.delivered_at ? when(sh.delivered_at) : "in transit"}</dd>
+          <dt>On PayPal order</dt><dd><Badge tone={sh.tracker_state === "pushed" ? "ok" : "bad"}>{sh.tracker_state}</Badge>{sh.tracker_error && ` ${sh.tracker_error}`}</dd>
+        </dl>
+      ) : (
+        <p className="small muted">Not shipped yet. Shipping records the supplier's tracking number and adds it to the PayPal order.</p>
+      )}
+      <div className="row">
+        {(!sh || sh.tracker_state !== "pushed") && <button className="btn" disabled={act.busy} onClick={() => run("ship")}>{sh ? "Retry tracking push" : "Ship order"}</button>}
+        {sh && !sh.delivered_at && <button className="btn" disabled={act.busy} onClick={() => run("deliver")}>Mark delivered</button>}
+        {ctx.config.payment_mode === "fixture" && ctx.config.scenarios_enabled && !(p.disputes ?? []).length && (
+          <button className="btn" disabled={act.busy} onClick={() => run("simulate-dispute", { reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED" })}>
+            Simulate buyer dispute
+          </button>
+        )}
+        {(p.disputes ?? []).map((d) => (
+          <button key={d.dispute_id} className="btn" onClick={() => go({ page: "disputes", id: d.dispute_id })}>Open dispute {d.paypal_dispute_id}</button>
+        ))}
+      </div>
+      <ErrorNotice error={act.error} onDismiss={() => act.setError(null)} />
+    </section>
   );
 }
