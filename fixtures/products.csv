@@ -1,0 +1,21 @@
+sku,name,category,attributes_json,on_hand,incoming,safety_stock,units_28d,history_days
+CHG-65W-PD,USB-C 65W PD wall charger,charger,"{""connector"":""usb-c"",""power_w"":65,""protocols"":[""pd3.0""],""certifications"":[""safety-a""]}",6,0,4,24,28
+CBL-C2C-1M,USB-C to USB-C cable 1m 60W,cable,"{""connector"":""usb-c-to-usb-c"",""length_cm"":100,""power_w"":60}",8,0,8,40,28
+CBL-C2L-1M,USB-C to Lightning cable 1m,cable,"{""connector"":""usb-c-to-lightning"",""length_cm"":100,""certifications"":[""mfi""]}",3,0,5,26,28
+EAR-BT-BASIC,Bluetooth 5.3 earbuds,audio,"{""wireless"":""bluetooth-5.3"",""form"":""in-ear""}",2,0,3,10,28
+CHG-20W-PD,USB-C 20W PD wall charger,charger,"{""connector"":""usb-c"",""power_w"":20,""protocols"":[""pd3.0""],""certifications"":[""safety-a""]}",3,0,4,22,28
+PB-10K,Power bank 10000mAh USB-C 20W,power_bank,"{""connector"":""usb-c"",""capacity_mah"":10000,""output_w"":20}",2,0,3,8,28
+CBL-C2C-2M,USB-C to USB-C cable 2m 100W,cable,"{""connector"":""usb-c-to-usb-c"",""length_cm"":200,""power_w"":100}",2,0,4,12,28
+SCR-TG,Tempered glass screen protector 6.1in,screen_protector,"{""fit"":""6.1in-generic"",""material"":""tempered-glass""}",5,0,10,30,28
+CBL-A2C-1M,USB-A to USB-C cable 1m,cable,"{""connector"":""usb-a-to-usb-c"",""length_cm"":100,""power_w"":15}",30,0,4,20,28
+CBL-C2C-1M-BRD,Braided USB-C cable 1m 60W,cable,"{""connector"":""usb-c-to-usb-c"",""length_cm"":100,""power_w"":60}",20,0,3,10,28
+CHG-30W-PD,USB-C 30W PD wall charger,charger,"{""connector"":""usb-c"",""power_w"":30,""protocols"":[""pd3.0""],""certifications"":[""safety-a""]}",18,0,3,14,28
+CHG-CAR-C,USB-C car charger 30W,charger,"{""connector"":""usb-c"",""power_w"":30,""mount"":""car""}",12,0,2,6,28
+EAR-WIRED-C,Wired USB-C earbuds,audio,"{""connector"":""usb-c"",""form"":""in-ear""}",10,0,2,8,28
+HP-OVER-BT,Over-ear Bluetooth headphones,audio,"{""wireless"":""bluetooth-5.3"",""form"":""over-ear""}",6,0,2,4,28
+PB-20K,Power bank 20000mAh USB-C 30W,power_bank,"{""connector"":""usb-c"",""capacity_mah"":20000,""output_w"":30}",4,6,2,6,28
+CASE-61-CLR,Clear phone case 6.1in,case,"{""fit"":""6.1in-generic"",""material"":""tpu""}",14,0,4,12,28
+SCR-PRIV,Privacy screen protector 6.1in,screen_protector,"{""fit"":""6.1in-generic"",""material"":""privacy-glass""}",9,0,3,8,28
+ADP-C2HDMI,USB-C to HDMI adapter 4K,adapter,"{""connector"":""usb-c-to-hdmi"",""resolution"":""4k60""}",8,0,2,4,28
+HUB-C-7IN1,USB-C 7-in-1 hub,adapter,"{""connector"":""usb-c"",""ports"":7}",3,0,1,2,10
+WALL-DUAL-35W,Dual-port 35W wall charger,charger,"{""connector"":""usb-c"",""power_w"":35,""protocols"":[""pd3.0""],""certifications"":[""safety-a""]}",4,4,3,10,28

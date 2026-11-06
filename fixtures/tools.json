@@ -1,0 +1,12 @@
+{
+  "_note": "Pay-per-call tool registry. Prices in USD cents are authoritative server-side data.",
+  "tools": [
+    {"code": "quote.supplier-a", "name": "Apex quote API", "provider_id": "supplier-a", "provider_name": "Apex Wholesale (simulated)", "price_cents": 1, "description": "Full-basket quote"},
+    {"code": "quote.supplier-b", "name": "Brightline quote API", "provider_id": "supplier-b", "provider_name": "Brightline Distribution (simulated)", "price_cents": 1, "description": "Full-basket quote"},
+    {"code": "quote.supplier-c", "name": "Cobalt quote API", "provider_id": "supplier-c", "provider_name": "Cobalt Direct (simulated)", "price_cents": 1, "description": "Full-basket quote"},
+    {"code": "negotiate.supplier-a", "name": "Apex negotiation API", "provider_id": "supplier-a", "provider_name": "Apex Wholesale (simulated)", "price_cents": 1, "description": "One negotiation round"},
+    {"code": "negotiate.supplier-b", "name": "Brightline negotiation API", "provider_id": "supplier-b", "provider_name": "Brightline Distribution (simulated)", "price_cents": 1, "description": "One negotiation round"},
+    {"code": "negotiate.supplier-c", "name": "Cobalt negotiation API", "provider_id": "supplier-c", "provider_name": "Cobalt Direct (simulated)", "price_cents": 1, "description": "One negotiation round"},
+    {"code": "market.price_check", "name": "Market price check", "provider_id": "market-desk", "provider_name": "Market Data Desk (Channel3-backed)", "price_cents": 2, "description": "Compares a unit price with live retail listings"}
+  ]
+}

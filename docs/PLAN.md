@@ -147,8 +147,11 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
 
 ## 8. Progress checklist
 
-- [ ] Phase 0 — Setup
-- [ ] Phase 1 — Domain core
+- [x] Phase 0 — Setup (Postgres 17 via Homebrew, uv, FastAPI, Alembic, health/ready, config validation)
+- [x] Phase 1 — Domain core (35 pytest tests passing; fixture buyer run reproduces $470 → $525 / $510 → $488 / C rejected)
+  - Decision: negotiation limit is 3 rounds per supplier **per run** (a re-run after changed terms may negotiate again).
+  - Decision: each new demo session gets a 50¢ synthetic starter tool credit (ledger kind `wallet_grant`, not PayPal money).
+  - Not yet built: CSV imports (preview/apply) — moved to Phase 2 with the UI.
 - [ ] Phase 2 — Offline product
 - [ ] Phase 3 — Real AI + PayPal
 - [ ] Phase 4 — Pay-per-call
