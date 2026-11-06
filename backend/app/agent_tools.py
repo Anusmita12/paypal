@@ -3,6 +3,7 @@
 There is deliberately no tool that approves, pays, captures, writes arbitrary data, or fetches URLs.
 """
 
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -210,7 +211,43 @@ def t_compare(ctx: ToolContext, _: NoArgs) -> tuple[dict, str]:
     return result, summary
 
 
+_DOLLARS = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?")
+
+
+def _cents(whole: str, frac: str | None) -> int:
+    return int(whole.replace(",", "")) * 100 + int((frac or "0").ljust(2, "0"))
+
+
+def ungrounded_amounts(text: str, comparison: dict) -> list[str]:
+    """Dollar amounts in `text` that appear nowhere in the server's comparison facts (cents fields, reason texts,
+    or budget headroom). The model may explain numbers; it may not invent them."""
+    allowed: set[int] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, bool):
+            return
+        if isinstance(node, int):
+            allowed.add(node)
+        elif isinstance(node, str):
+            allowed.update(_cents(w, f) for w, f in _DOLLARS.findall(node))
+        elif isinstance(node, dict):
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(comparison)
+    for o in comparison.get("offers", []):
+        allowed.add(abs(comparison["budget_cents"] - o["total_cents"]))
+    return [m.group(0) for m in _DOLLARS.finditer(text) if _cents(m.group(1), m.group(2)) not in allowed]
+
+
 def t_propose(ctx: ToolContext, a: ProposeArgs) -> tuple[dict, str]:
+    bad = ungrounded_amounts(a.explanation, compare(ctx.db, ctx.procurement))
+    if bad:
+        raise AppError("ungrounded_explanation",
+                       f"These amounts are not in any tool result: {', '.join(bad[:5])}. Use only server figures.", 422)
     proposal = create_proposal(ctx.db, ctx.procurement, a.quote_id, ctx.run.id, a.explanation)
     ctx.proposal_id = proposal.id
     snap = proposal.snapshot

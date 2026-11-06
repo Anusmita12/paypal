@@ -136,7 +136,8 @@ def run_agent_job(db: Session, payload: dict) -> None:
         _finish(db, run, procurement, "succeeded", None, None, summary)
     else:
         if procurement.status in ("planning", "negotiating"):
-            set_procurement_status(procurement, "no_feasible_offer", "no_feasible_offer")
+            feasible = ctx.last_comparison and ctx.last_comparison["best_quote_id"]
+            set_procurement_status(procurement, "no_feasible_offer", "agent_made_no_proposal" if feasible else "no_feasible_offer")
         _finish(db, run, procurement, "succeeded", None, None, summary)
 
 

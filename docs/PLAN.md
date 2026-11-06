@@ -164,6 +164,12 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
   - Decision: added "within N days" deadline hint; the sample request uses it so the demo works on any business date.
   - Decision: supplier terms are frozen during the reservation window; create/capture revalidate snapshot digest + reservation.
 - [ ] Phase 3 — Real AI + PayPal
+  - Built and tested offline (2026-11-06): `agent_llm.run_claude` manual tool loop (strict tool schemas, adaptive
+    thinking with `AI_EFFORT`, server-side refusal fallback on supported models, token accounting, no fixture fallback),
+    explanation grounding check (dollar amounts must exist in server facts), `paypal_client.SandboxPayPal` (OAuth cache,
+    PayPal-Request-Id, timeout/5xx/429 → unknown, 4xx → rejected issue code, 401 refresh), verified webhook inbox
+    (`/api/webhooks/paypal` → store → `process_webhook` job → re-read order → shared finalizer). 62 pytest passing.
+  - NOT yet verified against real Claude or real PayPal Sandbox: waiting for credentials + tunnel.
 - [ ] Phase 4 — Pay-per-call
 - [ ] Phase 5 — Disputes + dashboard
 - [ ] Phase 6 — Delivery

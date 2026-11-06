@@ -12,6 +12,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 import app.agent
 import app.payments
+import app.webhooks
 from app.api import router
 from app.config import get_settings
 from app.db import get_sessionmaker

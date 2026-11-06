@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app import approvals, imports, payments
+from app import approvals, imports, payments, webhooks
 from app.agent import start_run
 from app.compare import compare
 from app.config import Settings, get_settings
@@ -259,6 +259,22 @@ def approve(proposal_id: str, body: ApproveIn, s: DemoSession = Depends(current_
     purchase = approvals.approve(db, s, proposal_id, body.version, body.digest)
     db.commit()
     return _purchase_view(db, purchase)
+
+
+# --- webhooks (no session; provider signature verification instead of CSRF) ---
+
+
+@router.post("/webhooks/paypal")
+async def paypal_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
+    raw = await request.body()
+    if len(raw) > 256 * 1024:
+        raise AppError("payload_too_large", "Webhook body too large.", 413)
+    try:
+        event = json.loads(raw)
+    except ValueError as exc:
+        raise AppError("invalid_webhook", "Body is not JSON.", 400) from exc
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    return webhooks.receive(db, headers, event)
 
 
 # --- purchases and wallet ---

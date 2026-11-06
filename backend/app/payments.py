@@ -57,6 +57,7 @@ class PaymentProvider(Protocol):
     def create_order(self, request_id: str, payload: dict) -> dict: ...
     def get_order(self, order_id: str) -> dict: ...
     def capture_order(self, order_id: str, request_id: str) -> dict: ...
+    def verify_webhook(self, headers: dict[str, str], event: dict) -> bool: ...
 
 
 def money(cents: int) -> str:
@@ -102,6 +103,10 @@ class FixturePayPal:
             db.commit()
         self._fault("create_timeout_after_commit")
         return copy.deepcopy(order)
+
+    def verify_webhook(self, headers: dict[str, str], event: dict) -> bool:
+        """Offline stand-in for PayPal's verification endpoint (tests only)."""
+        return headers.get("paypal-transmission-sig") == "fixture-valid"
 
     def approve(self, order_id: str) -> dict:
         """Fixture-only stand-in for the buyer approving checkout on PayPal."""
@@ -411,11 +416,12 @@ def finalize_from_order(db: Session, purchase_id: str, order: dict, source: str)
         db.commit()
         return p
     unit = (order.get("purchase_units") or [{}])[0]
-    if order.get("id") != p.paypal_order_id or unit.get("custom_id") != p.id:
+    captures = (unit.get("payments") or {}).get("captures") or []
+    correlation = {unit.get("custom_id"), unit.get("reference_id"), *(c.get("custom_id") for c in captures)}
+    if order.get("id") != p.paypal_order_id or p.id not in correlation:
         _manual_review(db, p, "order_correlation_mismatch", source, order_id=order.get("id"))
         db.commit()
         return p
-    captures = (unit.get("payments") or {}).get("captures") or []
     if not captures:
         db.commit()
         return p

@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = ""
     ai_max_tool_calls: int = 20
-    ai_max_run_seconds: int = 90
+    ai_max_run_seconds: int = 180
     ai_max_output_tokens: int = 2048
+    ai_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
 
     payment_mode: Literal["fixture", "paypal_sandbox"] = "fixture"
     paypal_client_id: str = ""
