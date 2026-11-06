@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 // The dev server proxies /api so the session cookie stays first-party.
 export default defineConfig({
   plugins: [react()],
+  // Read the repo-root .env; Vite only exposes VITE_-prefixed variables to the browser bundle.
+  envDir: "..",
   server: {
     port: 5173,
     strictPort: true,

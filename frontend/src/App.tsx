@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { money } from "./format";
 import type { AppConfig, DemoSession } from "./types";
@@ -9,12 +9,16 @@ import PurchasesPage from "./pages/Purchases";
 import WalletPage from "./pages/Wallet";
 import DisputesPage from "./pages/Disputes";
 
+// AG Studio is large; load it only when the Insights page opens.
+const InsightsPage = lazy(() => import("./pages/Insights"));
+
 export type Route =
   | { page: "inventory" }
   | { page: "procurement"; id?: string }
   | { page: "purchases"; id?: string }
   | { page: "wallet" }
-  | { page: "disputes"; id?: string };
+  | { page: "disputes"; id?: string }
+  | { page: "insights" };
 
 function parseHash(): Route {
   const [, page, id] = window.location.hash.replace(/^#/, "").split("/");
@@ -22,6 +26,7 @@ function parseHash(): Route {
   if (page === "purchases") return { page, id };
   if (page === "wallet") return { page };
   if (page === "disputes") return { page, id };
+  if (page === "insights") return { page };
   return { page: "inventory" };
 }
 
@@ -36,6 +41,7 @@ const NAV: { page: Route["page"]; label: string }[] = [
   { page: "purchases", label: "Purchases" },
   { page: "wallet", label: "Tool wallet" },
   { page: "disputes", label: "Disputes" },
+  { page: "insights", label: "Insights" },
 ];
 
 export interface Ctx {
@@ -129,6 +135,11 @@ export default function App() {
         {route.page === "purchases" && <PurchasesPage ctx={ctx} id={route.id} />}
         {route.page === "wallet" && <WalletPage ctx={ctx} />}
         {route.page === "disputes" && <DisputesPage ctx={ctx} id={route.id} />}
+        {route.page === "insights" && (
+          <Suspense fallback={<Spinner label="Loading AG Studio…" />}>
+            <InsightsPage ctx={ctx} />
+          </Suspense>
+        )}
       </main>
     </div>
   );

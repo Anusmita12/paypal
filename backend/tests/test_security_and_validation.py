@@ -87,3 +87,13 @@ def test_relative_deadline_hint_is_a_suggestion_only(api):
     p = api.post("/api/procurements", {"request_text": "Restock under $500, delivered within 3 days"}).json()
     assert p["status"] == "needs_input" and p["requirements"] is None
     assert p["proposed"]["deadline"] == "2026-11-07" and p["proposed"]["budget_cents"] == 50_000
+
+
+def test_analytics_sources_are_session_scoped(api, other_api):
+    from tests.helpers import confirmed_procurement, run_buyer
+
+    run_buyer(api, confirmed_procurement(api)["procurement_id"])
+    mine = api.get("/api/analytics").json()["sources"]
+    assert len(mine["offers"]) >= 3 and len(mine["tool_usage"]) == 8 and len(mine["inventory"]) == 20
+    theirs = other_api.get("/api/analytics").json()["sources"]
+    assert theirs["offers"] == [] and theirs["tool_usage"] == []

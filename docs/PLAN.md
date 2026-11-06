@@ -180,7 +180,21 @@ Each phase leaves the app runnable, ends with tests run + a local git commit + a
     Sandbox needs `PAYPAL_PAYOUT_RECEIVER` (a Sandbox personal account email).
   - UI: top-up buttons, settle + payouts table with status check, live micro-payment ticker on the agent run.
   - Tests: 73 pytest, 3 Playwright.
-- [ ] Phase 5 — Disputes + dashboard
+- [x] Phase 5 — Disputes + dashboard (built + tested offline 2026-11-07; Sandbox dispute + AG Studio licence pending)
+  - Shipments: simulated carrier, tracking pushed to the PayPal order (`POST /v2/checkout/orders/{id}/track`, stable
+    PayPal-Request-Id), mark delivered.
+  - Disputes: `CUSTOMER.DISPUTE.*` webhooks → re-read `GET /v1/customer/disputes/{id}` → matched by capture ID; fixture
+    "simulate buyer dispute". Server gathers records (purchase, approval, capture, shipment); model (Gemini/Claude via
+    `llm.generate_json`, fixture template offline) drafts claims that must cite record IDs and use only recorded amounts;
+    one corrective retry; owner approves the exact digest; `provide-evidence` sent as multipart `input` JSON
+    (PROOF_OF_FULFILLMENT with tracking for not-received, else OTHER with notes); lost response → unknown → refresh.
+    Shapes taken from PayPal's published Disputes OpenAPI spec; real Sandbox submission still unverified.
+  - AG Studio 3.1 (AG Grid upgraded to 36.3, our own grids remain Community-only): Insights page with a prebuilt report over
+    `/api/analytics` (KPIs, quotes by supplier, pay-per-call spend, restock need, PayPal volume). Licence via
+    `VITE_AG_STUDIO_LICENSE_KEY` (watermark without it). Studio's built-in grid widget rendered empty here; replaced by a
+    chart for now. NOT built yet: AG Studio AI harness (custom `AgLlmAdapter` → our backend → Gemini) — stretch.
+  - Fixed along the way: crashed agent runs/drafts no longer stay "running"; mobile layout overflow from grid tracks.
+  - Tests: 81 pytest, 5 Playwright (desktop + mobile).
 - [ ] Phase 6 — Delivery
 - [ ] Hosting
 

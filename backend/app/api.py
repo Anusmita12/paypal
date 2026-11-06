@@ -508,3 +508,38 @@ def approve_dispute(dispute_id: str, body: DisputeApproveIn, s: DemoSession = De
 @router.post("/disputes/{dispute_id}/refresh")
 def refresh_dispute(dispute_id: str, s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
     return disputes.view(disputes.refresh(db, s.id, dispute_id))
+
+
+# --- analytics for the AG Studio dashboard (flat rows; dollars as display numbers, cents stay authoritative) ---
+
+
+@router.get("/analytics")
+def analytics(s: DemoSession = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+    suppliers = {x.id: x for x in db.scalars(select(Supplier).where(Supplier.session_id == s.id))}
+    procs = list(db.scalars(select(Procurement).where(Procurement.session_id == s.id)))
+    quotes = db.scalars(select(Quote).where(Quote.procurement_id.in_([p.id for p in procs])))
+    offers = [{"supplier": suppliers[q.supplier_id].name.replace(" (simulated)", ""), "negotiated": "negotiated" if q.negotiated else "list price",
+               "total_usd": q.total_cents / 100, "discount_usd": q.discount_cents / 100, "shipping_usd": q.shipping_cents / 100,
+               "quote_status": q.status, "delivery_date": q.delivery_date.isoformat()} for q in quotes]
+    proposals = db.scalars(select(Proposal).where(Proposal.session_id == s.id, Proposal.status.in_(["current", "approved"])))
+    savings = [{"proposal_version": p.version, "supplier": p.snapshot["supplier"]["name"].replace(" (simulated)", ""),
+                "total_usd": p.snapshot["total_cents"] / 100,
+                "savings_usd": (p.comparison.get("savings_cents") or 0) / 100,
+                "budget_headroom_usd": (p.snapshot["budget_cents"] - p.snapshot["total_cents"]) / 100, "status": p.status}
+               for p in proposals]
+    purchases_rows = [{"kind": p.kind.replace("_", " "), "status": p.status.replace("_", " "), "amount_usd": p.amount_cents / 100,
+                       "counterparty": p.snapshot.get("supplier", {}).get("name", "").replace(" (simulated)", ""),
+                       "day": p.created_at.date().isoformat()}
+                      for p in db.scalars(select(Purchase).where(Purchase.session_id == s.id))]
+    tools = {t.code: t for t in db.scalars(select(PaidTool))}
+    usage = [{"tool": tools[u.tool_code].name, "provider": tools[u.tool_code].provider_name.replace(" (simulated)", ""),
+              "cents": u.price_cents, "calls": 1, "settled": "settled" if u.payout_batch_id else "accrued"}
+             for u in db.scalars(select(ToolUsage).where(ToolUsage.session_id == s.id))]
+    dispute_rows = [{"reason": d.reason.replace("_", " ").lower(), "status": d.status.replace("_", " "), "amount_usd": d.amount_cents / 100}
+                    for d in db.scalars(select(Dispute).where(Dispute.session_id == s.id))]
+    inventory = [{"sku": line.sku, "category": line.category, "on_hand": line.on_hand, "incoming": line.incoming,
+                  "need": line.need, "status": line.status}
+                 for line in restock_lines(db, s.id, s.business_date, 14)]
+    return {"sources": {"offers": offers, "savings": savings, "purchases": purchases_rows, "tool_usage": usage,
+                        "disputes": dispute_rows, "inventory": inventory},
+            "note": "Dollar values are display conversions of integer-cent records."}
