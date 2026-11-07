@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # TradePilot AI
 
 An AI purchasing agent for a small electronics retailer that **buys within the owner's rules and pays with PayPal**.
@@ -177,3 +178,6 @@ docs/       architecture, verification, demo script, submission text, build cont
 ## License
 See [LICENSE](LICENSE). The copyright holder line is a placeholder until the owner chooses it. Third-party packages keep their
 own licences; AG Studio and AG Grid Enterprise are commercial (trial licence).
+=======
+# paypal
+>>>>>>> 115dae2f96f1c503bc5b8bb266ebcc7e5342737d
